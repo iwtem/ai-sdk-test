@@ -4,21 +4,18 @@ import { embedMany } from "ai";
 import { env } from "~/lib/env.mjs";
 
 function getEmbeddingModel(): EmbeddingModel {
-  if (env.EMBEDDING_PROVIDER === "qwen") {
-    const baseURL = env.QWEN_BASE_URL;
-    const apiKey = env.QWEN_API_KEY;
-    const modelId = env.QWEN_EMBEDDING_MODEL;
-    if (!baseURL || !apiKey || !modelId) {
-      throw new Error(
-        "当 EMBEDDING_PROVIDER=qwen 时需设置 QWEN_BASE_URL、QWEN_API_KEY、QWEN_EMBEDDING_MODEL",
-      );
+  const baseURL = env.EMBEDDING_BASE_URL;
+  if (baseURL) {
+    const apiKey = env.EMBEDDING_API_KEY;
+    if (!apiKey) {
+      throw new Error("设置 EMBEDDING_BASE_URL 时需同时设置 EMBEDDING_API_KEY");
     }
-    const qwen = createOpenAICompatible({
+    const provider = createOpenAICompatible({
       baseURL,
-      name: "qwen",
+      name: "embedding",
       apiKey,
     });
-    return qwen.embeddingModel(modelId);
+    return provider.embeddingModel(env.EMBEDDING_MODEL);
   }
   return env.EMBEDDING_MODEL;
 }
