@@ -1,7 +1,10 @@
 {
   "cSpell.words": [
     "langchain",
-    "QWEN"
+    "oklch",
+    "QWEN",
+    "shadcn",
+    "unrs"
   ],
   "editor.codeActionsOnSave": {
     "source.organizeImports.biome": "explicit",
