@@ -7,12 +7,29 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
-    "format": "biome format --write"
+    "format": "biome format --write",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run lib/db/migrate.ts",
+    "db:drop": "drizzle-kit drop",
+    "db:pull": "drizzle-kit introspect",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.35",
+    "@ai-sdk/react": "^3.0.118",
+    "@t3-oss/env-nextjs": "^0.13.10",
+    "ai": "^6.0.116",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "drizzle-zod": "^0.8.3",
+    "nanoid": "^5.1.6",
     "next": "16.1.6",
+    "postgres": "^3.4.8",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
@@ -21,6 +38,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "drizzle-kit": "^0.31.9",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
