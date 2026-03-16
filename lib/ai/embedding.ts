@@ -35,6 +35,9 @@ export const generateEmbeddings = async (
   const { embeddings } = await embedMany({
     model,
     values: chunks,
+    providerOptions: {
+      embedding: { dimensions: 1536 },
+    },
   });
   return embeddings.map((e, i) => ({ content: chunks[i], embedding: e }));
 };
