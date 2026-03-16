@@ -1,9 +1,10 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { EmbeddingModel } from "ai";
 import { embedMany } from "ai";
 import { env } from "~/lib/env.mjs";
 
-function getEmbeddingModel(): EmbeddingModel {
+export function getEmbeddingModel(): EmbeddingModel {
   const baseURL = env.EMBEDDING_BASE_URL || env.CHAT_BASE_URL;
   if (baseURL) {
     const apiKey = env.EMBEDDING_API_KEY || env.CHAT_API_KEY;
@@ -27,6 +28,10 @@ const generateChunks = (input: string): string[] => {
     .filter((i) => i !== "");
 };
 
+export const embeddingProviderOptions: ProviderOptions = {
+  embedding: { dimensions: 1536 },
+};
+
 export const generateEmbeddings = async (
   value: string,
 ): Promise<Array<{ embedding: number[]; content: string }>> => {
@@ -35,9 +40,7 @@ export const generateEmbeddings = async (
   const { embeddings } = await embedMany({
     model,
     values: chunks,
-    providerOptions: {
-      embedding: { dimensions: 1536 },
-    },
+    providerOptions: embeddingProviderOptions,
   });
   return embeddings.map((e, i) => ({ content: chunks[i], embedding: e }));
 };
