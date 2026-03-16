@@ -16,6 +16,13 @@ import {
   MessageResponse,
 } from "~/components/ai-elements/message";
 import type { PromptInputMessage } from "~/components/ai-elements/prompt-input";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "~/components/ai-elements/tool";
 import { ChatPromptInput } from "~/components/chat-prompt-input";
 import "streamdown/styles.css";
 import "katex/dist/katex.min.css";
@@ -78,6 +85,23 @@ export default function Chat() {
                           >
                             {part.text}
                           </MessageResponse>
+                        );
+                      case "tool-addResource":
+                      case "tool-getInformation":
+                        return (
+                          <Tool
+                            key={`${message.id}-${i}`}
+                            defaultOpen={part.state === "output-available"}
+                          >
+                            <ToolHeader type={part.type} state={part.state} />
+                            <ToolContent>
+                              <ToolInput input={part.input} />
+                              <ToolOutput
+                                output={part.output}
+                                errorText={part.errorText}
+                              />
+                            </ToolContent>
+                          </Tool>
                         );
                       default:
                         return null;
