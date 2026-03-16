@@ -55,8 +55,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col size-full">
-      <Conversation className="relative size-full min-h-0">
+    <Conversation className="relative size-full min-h-0">
         <ConversationContent
           className="w-full max-w-2xl mx-auto"
           style={{ paddingBottom: scrollPaddingBottom }}
@@ -106,6 +105,5 @@ export default function Chat() {
           useWebSearch={useWebSearch}
         />
       </Conversation>
-    </div>
   );
 }
