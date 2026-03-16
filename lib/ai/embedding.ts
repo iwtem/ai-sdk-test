@@ -4,9 +4,9 @@ import { embedMany } from "ai";
 import { env } from "~/lib/env.mjs";
 
 function getEmbeddingModel(): EmbeddingModel {
-  const baseURL = env.EMBEDDING_BASE_URL;
+  const baseURL = env.EMBEDDING_BASE_URL || env.CHAT_BASE_URL;
   if (baseURL) {
-    const apiKey = env.EMBEDDING_API_KEY;
+    const apiKey = env.EMBEDDING_API_KEY || env.CHAT_API_KEY;
     if (!apiKey) {
       throw new Error("设置 EMBEDDING_BASE_URL 时需同时设置 EMBEDDING_API_KEY");
     }
