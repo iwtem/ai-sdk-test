@@ -17,6 +17,8 @@ import {
 } from "~/components/ai-elements/message";
 import type { PromptInputMessage } from "~/components/ai-elements/prompt-input";
 import { ChatPromptInput } from "~/components/chat-prompt-input";
+import "streamdown/styles.css";
+import "katex/dist/katex.min.css";
 
 const models = [
   { id: "gpt-4o", name: "GPT-4o" },
@@ -56,54 +58,58 @@ export default function Chat() {
 
   return (
     <Conversation className="relative size-full min-h-0">
-        <ConversationContent
-          className="w-full max-w-2xl mx-auto"
-          style={{ paddingBottom: scrollPaddingBottom }}
-        >
-          {messages.length > 0 ? (
-            messages.map((message) => (
-              <Message from={message.role} key={message.id}>
-                <div key={message.id}>
-                  <MessageContent>
-                    {message.parts.map((part, i) => {
-                      switch (part.type) {
-                        case "text":
-                          return (
-                            <MessageResponse key={`${message.id}-${i}`}>
-                              {part.text}
-                            </MessageResponse>
-                          );
-                        default:
-                          return null;
-                      }
-                    })}
-                  </MessageContent>
-                </div>
-              </Message>
-            ))
-          ) : (
-            <ConversationEmptyState
-              title="Start a conversation"
-              description="Messages will appear here as the conversation progresses."
-              icon={<MessageSquareIcon className="size-6" />}
-            />
-          )}
-        </ConversationContent>
-        <ConversationScrollButton style={{ bottom: scrollPaddingBottom }} />
+      <ConversationContent
+        className="w-full max-w-2xl mx-auto"
+        style={{ paddingBottom: scrollPaddingBottom }}
+      >
+        {messages.length > 0 ? (
+          messages.map((message) => (
+            <Message from={message.role} key={message.id}>
+              <div key={message.id}>
+                <MessageContent>
+                  {message.parts.map((part, i) => {
+                    switch (part.type) {
+                      case "text":
+                        return (
+                          <MessageResponse
+                            key={`${message.id}-${i}`}
+                            animated
+                            isAnimating={part.state === "streaming"}
+                          >
+                            {part.text}
+                          </MessageResponse>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+                </MessageContent>
+              </div>
+            </Message>
+          ))
+        ) : (
+          <ConversationEmptyState
+            title="Start a conversation"
+            description="Messages will appear here as the conversation progresses."
+            icon={<MessageSquareIcon className="size-6" />}
+          />
+        )}
+      </ConversationContent>
+      <ConversationScrollButton style={{ bottom: scrollPaddingBottom }} />
 
-        <ChatPromptInput
-          ref={promptInputRef}
-          bottom={promptInputBottom}
-          model={model}
-          models={models}
-          onModelChange={setModel}
-          onSubmit={handleSubmit}
-          onTextChange={setText}
-          onWebSearchChange={setUseWebSearch}
-          status={status}
-          text={text}
-          useWebSearch={useWebSearch}
-        />
-      </Conversation>
+      <ChatPromptInput
+        ref={promptInputRef}
+        bottom={promptInputBottom}
+        model={model}
+        models={models}
+        onModelChange={setModel}
+        onSubmit={handleSubmit}
+        onTextChange={setText}
+        onWebSearchChange={setUseWebSearch}
+        status={status}
+        text={text}
+        useWebSearch={useWebSearch}
+      />
+    </Conversation>
   );
 }
