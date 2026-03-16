@@ -13,20 +13,26 @@ export const createResource = async (input: NewResourceParams) => {
   try {
     const { content } = insertResourceSchema.parse(input);
 
-    const [resource] = await db
-      .insert(resources)
-      .values({ content })
-      .returning();
-    const embeddings = await generateEmbeddings(content);
-    await db.insert(embeddingsTable).values(
-      embeddings.map((embedding) => ({
-        resourceId: resource.id,
-        content: embedding.content,
-        embedding: embedding.embedding,
-      })),
-    );
+    const message = await db.transaction(async (tx) => {
+      const [resource] = await tx
+        .insert(resources)
+        .values({ content })
+        .returning();
 
-    return "Resource successfully created with embeddings.";
+      const embeddings = await generateEmbeddings(content);
+
+      await tx.insert(embeddingsTable).values(
+        embeddings.map((embedding) => ({
+          resourceId: resource.id,
+          content: embedding.content,
+          embedding: embedding.embedding,
+        })),
+      );
+
+      return "Resource successfully created with embeddings.";
+    });
+
+    return message;
   } catch (e) {
     if (e instanceof Error)
       return e.message.length > 0 ? e.message : "Error, please try again.";
