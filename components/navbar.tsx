@@ -24,10 +24,9 @@ const menuItems: MenuItem[] = [
   { path: "/", name: "主页", icon: House },
   { path: "/datasets", name: "数据集", icon: Library },
   { path: "/chats", name: "聊天", icon: MessageSquareText },
-  { path: "/searches", name: "搜索", icon: Search },
-  { path: "/agents", name: "代理", icon: Cpu },
+  { path: "/agents", name: "智能体", icon: Cpu },
   { path: "/memories", name: "记忆", icon: Brain },
-  { path: "/files", name: "文件", icon: File },
+  { path: "/documents", name: "文档中心", icon: File },
 ];
 
 function isPathActive(currentPath: string, itemPath: string) {
@@ -49,7 +48,7 @@ const Navbar = () => {
               <Link
                 href={path}
                 className={cn(
-                  "inline-flex h-10 items-center justify-center rounded-full px-6 text-base transition-colors",
+                  "inline-flex h-10 items-center justify-center rounded-full px-6 text-base transition-colors gap-2",
                   "hover:text-current focus-visible:text-current",
                   isActive
                     ? "bg-text-primary text-bg-base"
@@ -58,7 +57,7 @@ const Navbar = () => {
                 aria-current={isActive ? "page" : undefined}
               >
                 {Icon && <Icon className="size-5" />}
-                <span className={cn(Icon && "sr-only")}>{name}</span>
+                <span>{name}</span>
               </Link>
             </li>
           );
