@@ -1,14 +1,11 @@
 {
-  "cSpell.words": [
-    "katex",
-    "langchain",
-    "oklch",
-    "QWEN",
-    "shadcn",
-    "unrs"
-  ],
+  "cSpell.words": ["katex", "langchain", "oklch", "QWEN", "shadcn", "unrs"],
+  "editor.rulers": [100],
   "editor.codeActionsOnSave": {
     "source.organizeImports.biome": "explicit",
     "source.fixAll.biome": "explicit"
-  }
+  },
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
 }
