@@ -19,6 +19,8 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.35",
     "@ai-sdk/react": "^3.0.118",
+    "@aws-sdk/client-s3": "^3.1015.0",
+    "@aws-sdk/s3-request-presigner": "^3.1015.0",
     "@mantine/hooks": "^8.3.17",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/code": "^1.1.0",
