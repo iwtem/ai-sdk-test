@@ -1,34 +1,23 @@
-"use client";
-
 import { CircleHelp } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type React from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import Navbar from "./navbar";
 
-export function Header({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLElement>) {
-  const pathname = usePathname();
-
+export function Header({ className, ...props }: React.HTMLAttributes<HTMLElement>) {
   return (
     <header
-      key="app-navbar"
       className={cn(
-        "w-full grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-8",
+        "sticky top-0 z-10 flex w-full items-center justify-between gap-8 bg-background px-10 py-5",
         className,
       )}
       {...props}
     >
-      <div className="inline-flex items-center">
-        <Link href="/" aria-current={pathname === "/" ? "page" : undefined}>
-          <Image src="/vercel.svg" alt="Site logo" width={40} height={40} />
-        </Link>
-      </div>
+      <Link href="/">
+        <Image src="/next.svg" alt="Site logo" width={40} height={40} />
+      </Link>
 
       <Navbar />
 

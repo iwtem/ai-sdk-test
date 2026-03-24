@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import type { PropsWithChildren } from "react";
 import { Header } from "~/components/header";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import "./globals.css";
@@ -19,21 +20,15 @@ export const metadata: Metadata = {
   description: "A personal assistant powered by AI SDK",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: PropsWithChildren) {
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
       >
         <TooltipProvider>
-          <main className="flex flex-col h-full">
-            <Header />
-            {children}
-          </main>
+          <Header />
+          <main className="flex-1">{children}</main>
         </TooltipProvider>
       </body>
     </html>

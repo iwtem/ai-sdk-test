@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Brain,
-  Cpu,
-  File,
-  House,
-  Library,
-  MessageSquareText,
-  Search,
-} from "lucide-react";
+import { Brain, Cpu, File, House, Library, MessageSquareText, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -48,11 +40,9 @@ const Navbar = () => {
               <Link
                 href={path}
                 className={cn(
-                  "inline-flex h-10 items-center justify-center rounded-full px-6 text-base transition-colors gap-2",
+                  "inline-flex h-10 items-center justify-center gap-2 rounded-full px-6 text-base transition-colors",
                   "hover:text-current focus-visible:text-current",
-                  isActive
-                    ? "bg-text-primary text-bg-base"
-                    : "text-muted-foreground",
+                  isActive ? "bg-text-primary text-bg-base" : "text-muted-foreground",
                 )}
                 aria-current={isActive ? "page" : undefined}
               >

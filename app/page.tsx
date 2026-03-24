@@ -10,11 +10,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "~/components/ai-elements/conversation";
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "~/components/ai-elements/message";
+import { Message, MessageContent, MessageResponse } from "~/components/ai-elements/message";
 import type { PromptInputMessage } from "~/components/ai-elements/prompt-input";
 import {
   Tool,
@@ -66,7 +62,7 @@ export default function Chat() {
   return (
     <Conversation className="relative size-full min-h-0">
       <ConversationContent
-        className="w-full max-w-2xl mx-auto"
+        className="mx-auto w-full max-w-2xl"
         style={{ paddingBottom: scrollPaddingBottom }}
       >
         {messages.length > 0 ? (
@@ -96,10 +92,7 @@ export default function Chat() {
                             <ToolHeader type={part.type} state={part.state} />
                             <ToolContent>
                               <ToolInput input={part.input} />
-                              <ToolOutput
-                                output={part.output}
-                                errorText={part.errorText}
-                              />
+                              <ToolOutput output={part.output} errorText={part.errorText} />
                             </ToolContent>
                           </Tool>
                         );
