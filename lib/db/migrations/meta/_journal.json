@@ -15,6 +15,13 @@
       "when": 1774365442146,
       "tag": "0001_magical_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774788251083,
+      "tag": "0002_clear_sandman",
+      "breakpoints": true
     }
   ]
 }

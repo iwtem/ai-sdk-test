@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "~/lib/env.mjs";
 
@@ -48,4 +48,36 @@ export const createUploadSignedUrl = async ({
     key,
     expiresIn,
   };
+};
+
+export const createDownloadSignedUrl = async ({
+  key,
+  fileName,
+  expiresIn = 60 * 15,
+}: {
+  key: string;
+  fileName: string;
+  expiresIn?: number;
+}) => {
+  ensureS3Env();
+  const client = getS3Client();
+  const safeName = fileName.replaceAll(/["\\]/g, "_");
+  const command = new GetObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: key,
+    ResponseContentDisposition: `attachment; filename="${safeName}"`,
+  });
+  const downloadUrl = await getSignedUrl(client, command, { expiresIn });
+  return { downloadUrl, expiresIn };
+};
+
+export const deleteObjectByKey = async (key: string) => {
+  ensureS3Env();
+  const client = getS3Client();
+  await client.send(
+    new DeleteObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+    }),
+  );
 };

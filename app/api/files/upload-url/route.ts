@@ -1,10 +1,16 @@
 import { z } from "zod";
+import { getFolderById } from "~/lib/folders/folder-service";
+import {
+  DOCUMENT_UPLOAD_REJECT_MESSAGE,
+  isDocumentUploadAllowed,
+} from "~/lib/files/document-upload-allowed";
 import { createUploadSignedUrl } from "~/lib/storage/s3";
 import { nanoid } from "~/lib/utils";
 
 const requestSchema = z.object({
   fileName: z.string().min(1),
   fileType: z.string().default("application/octet-stream"),
+  folderId: z.string().nullable().optional(),
 });
 
 const sanitizeFileName = (name: string) =>
@@ -25,6 +31,20 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const parsed = requestSchema.parse(body);
+
+    if (!isDocumentUploadAllowed(parsed.fileName, parsed.fileType)) {
+      return Response.json({ message: DOCUMENT_UPLOAD_REJECT_MESSAGE }, { status: 415 });
+    }
+
+    const folderId =
+      parsed.folderId === undefined || parsed.folderId === "" ? null : parsed.folderId;
+    if (folderId) {
+      const folder = await getFolderById(folderId);
+      if (!folder) {
+        return Response.json({ message: "文件夹不存在" }, { status: 404 });
+      }
+    }
+
     const safeName = sanitizeFileName(parsed.fileName);
     const storageKey = `${getDatePrefix()}/${nanoid()}-${safeName}`;
 

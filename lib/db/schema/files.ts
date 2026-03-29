@@ -3,6 +3,7 @@ import { bigint, index, pgEnum, pgTable, text, timestamp, varchar } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import type { z } from "zod";
 import { nanoid } from "~/lib/utils";
+import { folders } from "./folders";
 
 export const fileStatusEnum = pgEnum("file_status", [
   "uploaded",
@@ -36,6 +37,9 @@ export const files = pgTable(
     storageKey: text("storage_key").notNull(),
     checksumSha256: varchar("checksum_sha256", { length: 64 }),
     status: fileStatusEnum("status").notNull().default("uploaded"),
+    folderId: varchar("folder_id", { length: 191 }).references(() => folders.id, {
+      onDelete: "restrict",
+    }),
     createdBy: varchar("created_by", { length: 191 }),
     createdAt: timestamp("created_at").notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
@@ -45,6 +49,8 @@ export const files = pgTable(
     index("files_status_idx").on(table.status),
     index("files_created_at_idx").on(table.createdAt),
     index("files_name_idx").on(table.name),
+    index("files_folder_id_idx").on(table.folderId),
+    index("files_folder_id_created_at_idx").on(table.folderId, table.createdAt),
   ],
 );
 
