@@ -2,6 +2,9 @@
 
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -37,12 +40,13 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "./document-file-type";
 import { FolderActionsMenu } from "./document-folder-actions";
@@ -437,6 +441,26 @@ export function DocumentFileBrowser({
     }
   };
 
+  const handleSortBy = (field: FileSortField) => {
+    if (sortBy === field) {
+      onSortOrderChange(sortOrder === "asc" ? "desc" : "asc");
+      return;
+    }
+    onSortByChange(field);
+    if (field === "name") {
+      onSortOrderChange("asc");
+      return;
+    }
+    onSortOrderChange("desc");
+  };
+
+  const sortLabelMap: Record<FileSortField, string> = {
+    name: "文件名",
+    size: "大小",
+    updatedAt: "更新时间",
+    createdAt: "创建时间",
+  };
+
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
       {!trashView ? (
@@ -484,32 +508,6 @@ export function DocumentFileBrowser({
                 }
               }}
             />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={sortBy}
-              onValueChange={(v) => onSortByChange(v as FileSortField)}
-              disabled={loading}
-            >
-              <SelectTrigger size="sm" className="w-[132px]">
-                <SelectValue placeholder="排序" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt">创建时间</SelectItem>
-                <SelectItem value="updatedAt">更新时间</SelectItem>
-                <SelectItem value="name">文件名</SelectItem>
-                <SelectItem value="size">大小</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onSortOrderChange(sortOrder === "asc" ? "desc" : "asc")}
-              disabled={loading}
-            >
-              {sortOrder === "asc" ? "升序" : "降序"}
-            </Button>
           </div>
         </div>
 
@@ -673,94 +671,169 @@ export function DocumentFileBrowser({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border">
-          <div className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_auto] items-center bg-muted/60 px-4 py-2 text-muted-foreground text-xs">
-            <span>文件名</span>
-            <span>大小</span>
-            <span>更新时间</span>
-            <span>上传人</span>
-            <span className="text-center">操作</span>
-          </div>
-
-          <div className="divide-y divide-border">
-            {!trashView
-              ? visibleSubfolders.map((folder) => (
-                  <div
-                    key={`folder-${folder.id}`}
-                    className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_auto] items-center px-4 py-3 text-sm transition-colors hover:bg-muted/40"
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                <TableHead className="w-[38%]">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => handleSortBy("name")}
+                    disabled={loading}
                   >
-                    <button
-                      type="button"
-                      className="flex min-w-0 items-center gap-2.5 text-left"
-                      onClick={() => onNavigateToFolder(folder.id)}
+                    文件名
+                    {sortBy === "name" ? (
+                      sortOrder === "asc" ? (
+                        <ArrowUp data-icon="inline-end" />
+                      ) : (
+                        <ArrowDown data-icon="inline-end" />
+                      )
+                    ) : (
+                      <ArrowUpDown data-icon="inline-end" />
+                    )}
+                  </Button>
+                </TableHead>
+                <TableHead className="w-[16%]">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => handleSortBy("size")}
+                    disabled={loading}
+                  >
+                    大小
+                    {sortBy === "size" ? (
+                      sortOrder === "asc" ? (
+                        <ArrowUp data-icon="inline-end" />
+                      ) : (
+                        <ArrowDown data-icon="inline-end" />
+                      )
+                    ) : (
+                      <ArrowUpDown data-icon="inline-end" />
+                    )}
+                  </Button>
+                </TableHead>
+                <TableHead className="w-[22%]">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => handleSortBy("updatedAt")}
+                    disabled={loading}
+                  >
+                    更新时间
+                    {sortBy === "updatedAt" ? (
+                      sortOrder === "asc" ? (
+                        <ArrowUp data-icon="inline-end" />
+                      ) : (
+                        <ArrowDown data-icon="inline-end" />
+                      )
+                    ) : (
+                      <ArrowUpDown data-icon="inline-end" />
+                    )}
+                  </Button>
+                </TableHead>
+                <TableHead className="w-[16%]">上传人</TableHead>
+                <TableHead className="w-[8%] text-center">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!trashView
+                ? visibleSubfolders.map((folder) => (
+                    <TableRow
+                      key={`folder-${folder.id}`}
+                      className="text-sm transition-colors hover:bg-muted/40"
                     >
-                      <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{folder.name}</p>
-                        <p className="truncate text-muted-foreground text-xs">文件夹</p>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className="flex min-w-0 items-center gap-2.5 text-left"
+                          onClick={() => onNavigateToFolder(folder.id)}
+                        >
+                          <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{folder.name}</p>
+                            <p className="truncate text-muted-foreground text-xs">文件夹</p>
+                          </div>
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDateTime(folder.updatedAt)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">—</TableCell>
+                      <TableCell>
+                        <div className="flex justify-center">
+                          <FolderActionsMenu
+                            folder={folder}
+                            currentFolderId={currentFolderId}
+                            breadcrumb={breadcrumb}
+                            subfolders={subfolders}
+                            onRenameFolder={onRenameFolder}
+                            onMoveFolder={onMoveFolder}
+                            onDeleteFolder={onDeleteFolder}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : null}
+              {files.map((file) => {
+                const visualType = normalizeType(file.ext, file.mimeType);
+                return (
+                  <TableRow key={file.id} className="text-sm transition-colors hover:bg-muted/40">
+                    <TableCell>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="text-muted-foreground">
+                          <FileTypeIcon type={visualType} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{file.name}</p>
+                          <p className="truncate text-muted-foreground text-xs">
+                            {fileVisualTypeLabels[visualType]} · {statusTextMap[file.status]}
+                          </p>
+                        </div>
                       </div>
-                    </button>
-                    <span className="text-muted-foreground">—</span>
-                    <span className="text-muted-foreground">
-                      {formatDateTime(folder.updatedAt)}
-                    </span>
-                    <span className="text-muted-foreground">—</span>
-                    <div className="flex justify-center">
-                      <FolderActionsMenu
-                        folder={folder}
-                        currentFolderId={currentFolderId}
-                        breadcrumb={breadcrumb}
-                        subfolders={subfolders}
-                        onRenameFolder={onRenameFolder}
-                        onMoveFolder={onMoveFolder}
-                        onDeleteFolder={onDeleteFolder}
-                      />
-                    </div>
-                  </div>
-                ))
-              : null}
-            {files.map((file) => {
-              const visualType = normalizeType(file.ext, file.mimeType);
-              return (
-                <div
-                  key={file.id}
-                  className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_auto] items-center px-4 py-3 text-sm transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="text-muted-foreground">
-                      <FileTypeIcon type={visualType} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{file.name}</p>
-                      <p className="truncate text-muted-foreground text-xs">
-                        {fileVisualTypeLabels[visualType]} · {statusTextMap[file.status]}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-muted-foreground">{formatBytes(file.sizeBytes)}</span>
-                  <span className="text-muted-foreground">{formatDateTime(file.updatedAt)}</span>
-                  <span className="text-muted-foreground">{file.owner || "未知"}</span>
-                  <div className="flex justify-center">
-                    <FileActionsMenu
-                      trashView={trashView}
-                      file={file}
-                      currentFolderId={currentFolderId}
-                      breadcrumb={breadcrumb}
-                      subfolders={subfolders}
-                      movingFileId={movingFileId}
-                      deletingFileId={deletingFileId}
-                      purgingFileId={purgingFileId}
-                      onMoveFile={onMoveFile}
-                      onDeleteFile={onDeleteFile}
-                      onRenameFile={onRenameFile}
-                      onRestore={onRestoreFile}
-                      onPurge={onPurgeFile}
-                      fetchDownloadUrl={fetchDownloadUrl}
-                      flashNotice={flashNotice}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatBytes(file.sizeBytes)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(file.updatedAt)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{file.owner || "未知"}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-center">
+                        <FileActionsMenu
+                          trashView={trashView}
+                          file={file}
+                          currentFolderId={currentFolderId}
+                          breadcrumb={breadcrumb}
+                          subfolders={subfolders}
+                          movingFileId={movingFileId}
+                          deletingFileId={deletingFileId}
+                          purgingFileId={purgingFileId}
+                          onMoveFile={onMoveFile}
+                          onDeleteFile={onDeleteFile}
+                          onRenameFile={onRenameFile}
+                          onRestore={onRestoreFile}
+                          onPurge={onPurgeFile}
+                          fetchDownloadUrl={fetchDownloadUrl}
+                          flashNotice={flashNotice}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <div className="border-border border-t px-3 py-2 text-muted-foreground text-xs">
+            当前按 {sortLabelMap[sortBy]} {sortOrder === "asc" ? "升序" : "降序"} 排序
           </div>
         </div>
       )}
