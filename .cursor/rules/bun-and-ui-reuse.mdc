@@ -1,0 +1,32 @@
+---
+description: 默认使用 Bun（非 npm）；优先 shadcn/ui 与成熟社区组件，避免重复造轮子
+alwaysApply: true
+---
+
+# Bun 与 UI 组件约定
+
+## 包管理器：默认 Bun，不要用 npm 当默认
+
+本仓库默认使用 **Bun** 安装依赖与执行脚本，**不要把 npm / npx 当作默认命令**（除非用户明确要求）。
+
+- 安装与脚本：`bun install`、`bun add`、`bun remove`、`bun run <script>`
+- 一次性 CLI：`bunx <工具>`（等价场景下替代 `npx`）
+- 在终端命令、说明文字、示例中，优先写 Bun 写法
+
+```bash
+# ✅ 推荐
+bun install
+bun add zod
+bun run dev
+bunx shadcn@latest add button
+
+# ❌ 不要作为本项目的默认示例
+npm install
+npx shadcn@latest add button
+```
+
+## UI：优先 shadcn/ui 与成熟方案
+
+- 在实现对话框、抽屉、下拉、气泡、标签页、表格、表单等**通用 UI 原语**前，先查 **`components/ui`** 与项目里的 **`components.json`**（shadcn 已接入时），已有则组合使用，不要从零重写一套。
+- 需要新 shadcn 区块件时，用 **`bunx shadcn@latest add <组件名>`**（或项目文档里约定的等价命令），而不是手写同等功能的底层实现。
+- 对社区里**高频、成熟**的模式（如复杂 Select、日期选择、虚拟列表等），优先选用与当前栈兼容的知名库；仅在确有缺口或强定制需求时再自研。
