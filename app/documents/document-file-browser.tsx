@@ -43,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "./document-file-type";
 import { FolderActionsMenu } from "./document-folder-actions";
 import { formatBytes, formatDateTime, statusTextMap } from "./format";
@@ -523,22 +524,27 @@ export function DocumentFileBrowser({
               新建文件夹
             </Button>
           ) : null}
-          <Button
-            variant={viewMode === "card" ? "default" : "outline"}
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => {
+              if (v === "card" || v === "list") onViewModeChange(v);
+            }}
+            variant="outline"
             size="sm"
-            onClick={() => onViewModeChange("card")}
+            spacing={0}
+            className="shrink-0 rounded-lg border border-border"
+            aria-label="视图布局"
           >
-            <Grid2x2 className="size-4" />
-            卡片
-          </Button>
-          <Button
-            variant={viewMode === "list" ? "default" : "outline"}
-            size="sm"
-            onClick={() => onViewModeChange("list")}
-          >
-            <List className="size-4" />
-            列表
-          </Button>
+            <ToggleGroupItem value="card" aria-label="卡片视图">
+              <Grid2x2 className="size-4" />
+              卡片
+            </ToggleGroupItem>
+            <ToggleGroupItem value="list" aria-label="列表视图">
+              <List className="size-4" />
+              列表
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
       </div>
 
