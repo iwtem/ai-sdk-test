@@ -8,9 +8,9 @@ import {
   isDocumentUploadAllowed,
 } from "~/lib/files/document-upload-allowed";
 import {
+  buildDocumentsHref,
   type DocumentsUrlState,
-  parseDocumentsSearchParams,
-  serializeDocumentsUrl,
+  parseDocumentsLocation,
 } from "./documents-url";
 import { formatBytes } from "./format";
 import type { FileItem, FolderListItem, UploadTask, ViewMode } from "./types";
@@ -43,18 +43,20 @@ function mapFileItems(
   }));
 }
 
-/** URL 解析随 Next `useSearchParams` 更新；浏览器后退/前进会触发重渲染并同步列表。 */
-function useParsedDocumentsUrl() {
+/** URL 解析随 pathname + searchParams 更新；浏览器后退/前进会触发重渲染并同步列表。 */
+function useParsedDocumentsUrl(pathname: string) {
   const searchParams = useSearchParams();
-  const key = searchParams.toString();
-  return useMemo(() => parseDocumentsSearchParams(new URLSearchParams(key)), [key]);
+  return useMemo(
+    () => parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams],
+  );
 }
 
 export function useDocumentsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const parsed = useParsedDocumentsUrl();
+  const parsed = useParsedDocumentsUrl(pathname);
 
   const currentFolderId = parsed.folderId;
   const trashView = parsed.trashView;
@@ -69,65 +71,47 @@ export function useDocumentsPage() {
 
   const commitUrl = useCallback(
     (next: DocumentsUrlState) => {
-      const qs = serializeDocumentsUrl(next);
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      router.replace(buildDocumentsHref(next), { scroll: false });
     },
-    [pathname, router],
+    [router],
   );
 
   const navigateToFolder = useCallback(
     (folderId: string | null) => {
-      const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       commitUrl({ ...prev, folderId, trashView: false });
     },
-    [searchParams, commitUrl],
-  );
-
-  const setTrashViewMode = useCallback(
-    (value: boolean) => {
-      const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
-      if (value) {
-        commitUrl({
-          ...prev,
-          trashView: true,
-          folderId: null,
-          q: "",
-        });
-      } else {
-        commitUrl({ ...prev, trashView: false });
-      }
-    },
-    [searchParams, commitUrl],
+    [pathname, searchParams, commitUrl],
   );
 
   const setSortBy = useCallback(
     (sort: DocumentsUrlState["sortBy"]) => {
-      const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       commitUrl({ ...prev, sortBy: sort });
     },
-    [searchParams, commitUrl],
+    [pathname, searchParams, commitUrl],
   );
 
   const setSortOrder = useCallback(
     (order: DocumentsUrlState["sortOrder"]) => {
-      const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       commitUrl({ ...prev, sortOrder: order });
     },
-    [searchParams, commitUrl],
+    [pathname, searchParams, commitUrl],
   );
 
   const setViewMode = useCallback(
     (mode: ViewMode) => {
-      const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       commitUrl({ ...prev, viewMode: mode });
     },
-    [searchParams, commitUrl],
+    [pathname, searchParams, commitUrl],
   );
 
   const applySearchToUrl = useCallback(() => {
-    const prev = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+    const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
     commitUrl({ ...prev, q: keywordDraft.trim() });
-  }, [searchParams, commitUrl, keywordDraft]);
+  }, [pathname, searchParams, commitUrl, keywordDraft]);
 
   const [breadcrumb, setBreadcrumb] = useState<Array<{ id: string; name: string }>>([]);
   const [subfolders, setSubfolders] = useState<FolderListItem[]>([]);
@@ -202,6 +186,7 @@ export function useDocumentsPage() {
       const params = new URLSearchParams();
       if (args.trash) {
         params.set("trash", "true");
+        if (args.query.trim()) params.set("q", args.query.trim());
       } else {
         if (args.query.trim()) params.set("q", args.query.trim());
         if (args.folderId) params.set("folderId", args.folderId);
@@ -249,7 +234,7 @@ export function useDocumentsPage() {
   );
 
   const refreshTrashList = useCallback(async () => {
-    const p = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
     setLoading(true);
     setError(null);
     try {
@@ -268,11 +253,11 @@ export function useDocumentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [fetchFilesFromApi, searchParams]);
+  }, [fetchFilesFromApi, pathname, searchParams]);
 
   const refreshCurrentView = useCallback(
     async (query: string, folderId: string | null) => {
-      const p = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       setError(null);
       setLoading(true);
       try {
@@ -296,22 +281,20 @@ export function useDocumentsPage() {
         setLoading(false);
       }
     },
-    [fetchFilesFromApi, fetchFolders, loadBreadcrumb, searchParams],
+    [fetchFilesFromApi, fetchFolders, loadBreadcrumb, pathname, searchParams],
   );
 
-  const urlKey = searchParams.toString();
-
   useEffect(() => {
-    const p = parseDocumentsSearchParams(new URLSearchParams(urlKey));
+    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
     if (!p.trashView) return;
     void refreshTrashList();
-  }, [urlKey, refreshTrashList]);
+  }, [pathname, searchParams, refreshTrashList]);
 
   useEffect(() => {
-    const p = parseDocumentsSearchParams(new URLSearchParams(urlKey));
+    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
     if (p.trashView) return;
     void refreshCurrentView(p.q, p.folderId);
-  }, [urlKey, refreshCurrentView]);
+  }, [pathname, searchParams, refreshCurrentView]);
 
   const createFolder = useCallback(
     async (name: string) => {
@@ -530,11 +513,11 @@ export function useDocumentsPage() {
         setError("上传失败，请重试。");
       }
 
-      const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       await refreshCurrentView(snap.q, snap.folderId);
       setUploading(false);
     },
-    [processSingleFile, refreshCurrentView, searchParams],
+    [processSingleFile, refreshCurrentView, pathname, searchParams],
   );
 
   const handleSelectFile = useCallback(() => {
@@ -577,14 +560,14 @@ export function useDocumentsPage() {
           setError(body.message || `移动失败：${res.status}`);
           return;
         }
-        const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
         if (snap.trashView) await refreshTrashList();
         else await refreshCurrentView(snap.q, snap.folderId);
       } finally {
         setMovingFileId(null);
       }
     },
-    [refreshTrashList, refreshCurrentView, searchParams],
+    [refreshTrashList, refreshCurrentView, pathname, searchParams],
   );
 
   const renameFile = useCallback(
@@ -605,11 +588,11 @@ export function useDocumentsPage() {
         setError(body.message || `重命名失败：${res.status}`);
         return false;
       }
-      const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+      const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
       await refreshCurrentView(snap.q, snap.folderId);
       return true;
     },
-    [refreshCurrentView, searchParams],
+    [refreshCurrentView, pathname, searchParams],
   );
 
   const deleteFile = useCallback(
@@ -623,7 +606,7 @@ export function useDocumentsPage() {
           setError(body.message || `删除失败：${res.status}`);
           return false;
         }
-        const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
         if (snap.trashView) await refreshTrashList();
         else await refreshCurrentView(snap.q, snap.folderId);
         return true;
@@ -631,7 +614,7 @@ export function useDocumentsPage() {
         setDeletingFileId(null);
       }
     },
-    [refreshTrashList, refreshCurrentView, searchParams],
+    [refreshTrashList, refreshCurrentView, pathname, searchParams],
   );
 
   const restoreFile = useCallback(
@@ -692,7 +675,7 @@ export function useDocumentsPage() {
 
   const loadMoreFiles = useCallback(async () => {
     if (!hasMoreFiles || loadingMore) return;
-    const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+    const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
     setLoadingMore(true);
     setError(null);
     try {
@@ -709,7 +692,7 @@ export function useDocumentsPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMoreFiles, loadingMore, fetchFilesFromApi, searchParams]);
+  }, [hasMoreFiles, loadingMore, fetchFilesFromApi, pathname, searchParams]);
 
   const retryTask = useCallback(
     async (task: UploadTask) => {
@@ -717,7 +700,7 @@ export function useDocumentsPage() {
       setUploading(true);
       try {
         await processSingleFile(task.id, task.file);
-        const snap = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
+        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
         await refreshCurrentView(snap.q, snap.folderId);
       } catch {
         // error is tracked on task
@@ -725,7 +708,7 @@ export function useDocumentsPage() {
         setUploading(false);
       }
     },
-    [refreshCurrentView, processSingleFile, updateTask, searchParams],
+    [refreshCurrentView, processSingleFile, updateTask, pathname, searchParams],
   );
 
   const statItems = useMemo(
@@ -746,19 +729,31 @@ export function useDocumentsPage() {
   );
 
   const fetchFiles = useCallback(() => {
-    const p = parseDocumentsSearchParams(new URLSearchParams(searchParams.toString()));
-    if (p.trashView) {
-      void refreshTrashList();
-    } else {
-      applySearchToUrl();
-    }
-  }, [searchParams, refreshTrashList, applySearchToUrl]);
+    applySearchToUrl();
+  }, [applySearchToUrl]);
+
+  const trashEntryHref = useMemo(() => {
+    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
+    return buildDocumentsHref({
+      ...p,
+      trashView: true,
+      folderId: null,
+      q: "",
+    });
+  }, [pathname, searchParams]);
+
+  const documentsBrowseHref = useMemo(() => {
+    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
+    if (!p.trashView) return buildDocumentsHref(p);
+    return buildDocumentsHref({ ...p, trashView: false });
+  }, [pathname, searchParams]);
 
   return {
     viewMode,
     setViewMode,
     trashView,
-    setTrashViewMode,
+    trashEntryHref,
+    documentsBrowseHref,
     sortBy,
     setSortBy,
     sortOrder,
@@ -777,6 +772,7 @@ export function useDocumentsPage() {
     deleteFolder,
     keyword: keywordDraft,
     setKeyword: setKeywordDraft,
+    appliedQuery: parsed.q,
     files,
     loading,
     error,

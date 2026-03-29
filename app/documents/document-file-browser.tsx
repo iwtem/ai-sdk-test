@@ -312,7 +312,6 @@ type DocumentFileBrowserProps = {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   trashView: boolean;
-  onTrashViewChange: (value: boolean) => void;
   sortBy: FileSortField;
   sortOrder: FileSortOrder;
   onSortByChange: (v: FileSortField) => void;
@@ -321,13 +320,14 @@ type DocumentFileBrowserProps = {
   loadingMore: boolean;
   onLoadMore: () => void;
   keyword: string;
+  /** 已提交到 URL 的搜索词，用于与文件列表对齐并过滤子文件夹 */
+  appliedQuery: string;
   onKeywordChange: (value: string) => void;
   onSearch: () => void;
   loading: boolean;
   error: string | null;
   uploadMessage: string | null;
   files: FileItem[];
-  subfolderCount: number;
   foldersLoading: boolean;
   currentFolderId: string | null;
   breadcrumb: Array<{ id: string; name: string }>;
@@ -356,7 +356,6 @@ export function DocumentFileBrowser({
   viewMode,
   onViewModeChange,
   trashView,
-  onTrashViewChange,
   sortBy,
   sortOrder,
   onSortByChange,
@@ -365,13 +364,13 @@ export function DocumentFileBrowser({
   loadingMore,
   onLoadMore,
   keyword,
+  appliedQuery,
   onKeywordChange,
   onSearch,
   loading,
   error,
   uploadMessage,
   files,
-  subfolderCount,
   foldersLoading,
   currentFolderId,
   breadcrumb,
@@ -416,6 +415,13 @@ export function DocumentFileBrowser({
     }
     return list;
   }, [subfolders, sortBy, sortOrder, trashView]);
+
+  const visibleSubfolders = useMemo(() => {
+    if (trashView) return [];
+    const q = appliedQuery.trim().toLowerCase();
+    if (!q) return sortedSubfolders;
+    return sortedSubfolders.filter((f) => f.name.toLowerCase().includes(q));
+  }, [sortedSubfolders, appliedQuery, trashView]);
 
   const handleCreateFolder = async () => {
     setCreatingFolder(true);
@@ -465,10 +471,11 @@ export function DocumentFileBrowser({
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder={trashView ? "搜索回收站文件名" : "搜索文件名"}
+              placeholder={
+                trashView ? "搜索已删除文件名，按 Enter 搜索" : "搜索文件名，按 Enter 搜索"
+              }
               className="pl-8"
               value={keyword}
-              disabled={trashView}
               onChange={(e) => onKeywordChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -517,17 +524,6 @@ export function DocumentFileBrowser({
             </Button>
           ) : null}
           <Button
-            variant={trashView ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => onTrashViewChange(!trashView)}
-          >
-            {trashView ? "返回文档" : "回收站"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={onSearch} disabled={loading || trashView}>
-            <Search className="size-4" />
-            {loading ? "加载中" : "搜索"}
-          </Button>
-          <Button
             variant={viewMode === "card" ? "default" : "outline"}
             size="sm"
             onClick={() => onViewModeChange("card")}
@@ -553,23 +549,32 @@ export function DocumentFileBrowser({
         </div>
       ) : null}
 
-      {uploadMessage ? (
+      {!trashView && uploadMessage ? (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-700 text-sm dark:text-emerald-300">
           <CheckCircle2 className="size-4" />
           {uploadMessage}
         </div>
       ) : null}
 
-      {!loading && !foldersLoading && files.length === 0 && (trashView || subfolderCount === 0) ? (
+      {!loading &&
+      !foldersLoading &&
+      files.length === 0 &&
+      (trashView || visibleSubfolders.length === 0) ? (
         <div className="rounded-xl border border-border bg-background px-4 py-12 text-center text-muted-foreground text-sm">
-          {trashView ? "回收站为空。" : "当前目录下暂无文件与子文件夹，可上传文档或新建文件夹。"}
+          {trashView
+            ? !appliedQuery.trim()
+              ? "回收站为空。"
+              : "未找到匹配的已删除文件。"
+            : !appliedQuery.trim()
+              ? "当前目录下暂无文件与子文件夹，可上传文档或新建文件夹。"
+              : "没有匹配的文件或子文件夹，可调整关键词或清空搜索。"}
         </div>
       ) : null}
 
       {viewMode === "card" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {!trashView
-            ? sortedSubfolders.map((folder) => (
+            ? visibleSubfolders.map((folder) => (
                 <article
                   key={`folder-${folder.id}`}
                   className="rounded-xl border border-border bg-background p-4 transition-colors hover:bg-muted/40"
@@ -672,7 +677,7 @@ export function DocumentFileBrowser({
 
           <div className="divide-y divide-border">
             {!trashView
-              ? sortedSubfolders.map((folder) => (
+              ? visibleSubfolders.map((folder) => (
                   <div
                     key={`folder-${folder.id}`}
                     className="grid grid-cols-[1.6fr_0.7fr_1fr_0.9fr_auto] items-center px-4 py-3 text-sm transition-colors hover:bg-muted/40"
