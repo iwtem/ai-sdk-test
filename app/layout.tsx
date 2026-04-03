@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { PropsWithChildren } from "react";
-import { Header } from "~/components/header";
+import { HeaderGuard } from "~/components/header-guard";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import "./globals.css";
 
@@ -27,8 +27,8 @@ export default function RootLayout({ children }: PropsWithChildren) {
         className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
       >
         <TooltipProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
+          <HeaderGuard />
+          <main className="flex min-h-0 flex-1 flex-col">{children}</main>
         </TooltipProvider>
       </body>
     </html>

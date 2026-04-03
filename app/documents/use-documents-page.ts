@@ -669,6 +669,13 @@ export function useDocumentsPage() {
     return body.downloadUrl;
   }, []);
 
+  const openPreview = useCallback(
+    (fileId: string) => {
+      router.push(`/documents/preview/${fileId}`);
+    },
+    [router],
+  );
+
   const flashNotice = useCallback((msg: string) => {
     setUploadMessage(msg);
   }, []);
@@ -797,6 +804,7 @@ export function useDocumentsPage() {
     restoreFile,
     purgeFile,
     purgingFileId,
+    openPreview,
     fetchDownloadUrl,
     flashNotice,
   };

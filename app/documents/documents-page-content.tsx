@@ -92,6 +92,7 @@ export function DocumentsPageContent() {
     restoreFile,
     purgeFile,
     purgingFileId,
+    openPreview,
     fetchDownloadUrl,
     flashNotice,
   } = useDocumentsPage();
@@ -161,6 +162,7 @@ export function DocumentsPageContent() {
             onRestoreFile={restoreFile}
             onPurgeFile={purgeFile}
             purgingFileId={purgingFileId}
+            onOpenPreview={openPreview}
             fetchDownloadUrl={fetchDownloadUrl}
             flashNotice={flashNotice}
             onNavigateToFolder={navigateToFolder}

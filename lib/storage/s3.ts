@@ -71,6 +71,34 @@ export const createDownloadSignedUrl = async ({
   return { downloadUrl, expiresIn };
 };
 
+export const createPreviewSignedUrl = async ({
+  key,
+  expiresIn = 60 * 15,
+}: {
+  key: string;
+  expiresIn?: number;
+}) => {
+  ensureS3Env();
+  const client = getS3Client();
+  const command = new GetObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: key,
+  });
+  const previewUrl = await getSignedUrl(client, command, { expiresIn });
+  return { previewUrl, expiresIn };
+};
+
+export const getObjectByKey = async (key: string) => {
+  ensureS3Env();
+  const client = getS3Client();
+  return client.send(
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: key,
+    }),
+  );
+};
+
 export const deleteObjectByKey = async (key: string) => {
   ensureS3Env();
   const client = getS3Client();

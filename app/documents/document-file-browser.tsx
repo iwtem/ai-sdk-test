@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  Eye,
   Folder,
   Grid2x2,
   List,
@@ -68,6 +69,7 @@ function FileActionsMenu({
   onRenameFile,
   onRestore,
   onPurge,
+  onOpenPreview,
   fetchDownloadUrl,
   flashNotice,
 }: {
@@ -84,6 +86,7 @@ function FileActionsMenu({
   onRenameFile: (fileId: string, name: string) => Promise<boolean>;
   onRestore: (fileId: string) => Promise<boolean>;
   onPurge: (fileId: string) => Promise<boolean>;
+  onOpenPreview: (fileId: string) => void;
   fetchDownloadUrl: (fileId: string) => Promise<string>;
   flashNotice: (msg: string) => void;
 }) {
@@ -177,6 +180,10 @@ function FileActionsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => onOpenPreview(file.id)}>
+            <Eye className="size-4" />
+            预览
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
               void fetchDownloadUrl(file.id).then((url) => {
@@ -345,6 +352,7 @@ type DocumentFileBrowserProps = {
   onRestoreFile: (fileId: string) => Promise<boolean>;
   onPurgeFile: (fileId: string) => Promise<boolean>;
   purgingFileId: string | null;
+  onOpenPreview: (fileId: string) => void;
   fetchDownloadUrl: (fileId: string) => Promise<string>;
   flashNotice: (msg: string) => void;
   onNavigateToFolder: (folderId: string | null) => void;
@@ -388,6 +396,7 @@ export function DocumentFileBrowser({
   onRestoreFile,
   onPurgeFile,
   purgingFileId,
+  onOpenPreview,
   fetchDownloadUrl,
   flashNotice,
   onNavigateToFolder,
@@ -646,6 +655,7 @@ export function DocumentFileBrowser({
                       onRenameFile={onRenameFile}
                       onRestore={onRestoreFile}
                       onPurge={onPurgeFile}
+                      onOpenPreview={onOpenPreview}
                       fetchDownloadUrl={fetchDownloadUrl}
                       flashNotice={flashNotice}
                     />
@@ -822,6 +832,7 @@ export function DocumentFileBrowser({
                           onRenameFile={onRenameFile}
                           onRestore={onRestoreFile}
                           onPurge={onPurgeFile}
+                          onOpenPreview={onOpenPreview}
                           fetchDownloadUrl={fetchDownloadUrl}
                           flashNotice={flashNotice}
                         />
