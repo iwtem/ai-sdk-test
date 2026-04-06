@@ -134,6 +134,42 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 }
 
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await context.params;
+    if (!id) {
+      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+    }
+
+    const [file] = await db
+      .select({
+        id: files.id,
+        name: files.name,
+        ext: files.ext,
+        mimeType: files.mimeType,
+        sizeBytes: files.sizeBytes,
+        status: files.status,
+        folderId: files.folderId,
+        createdBy: files.createdBy,
+        createdAt: files.createdAt,
+        updatedAt: files.updatedAt,
+      })
+      .from(files)
+      .where(and(eq(files.id, id), isNull(files.deletedAt)));
+
+    if (!file) {
+      return Response.json({ message: "文件不存在" }, { status: 404 });
+    }
+
+    return Response.json({ file });
+  } catch (error) {
+    return Response.json(
+      { message: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;

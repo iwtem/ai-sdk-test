@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  Eye,
   Folder,
   Grid2x2,
   List,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Search,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -186,6 +188,12 @@ function FileActionsMenu({
           >
             <Download className="size-4" />
             下载
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href={`/documents/${file.id}`}>
+              <Eye className="size-4" />
+              查看详情
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
@@ -652,7 +660,11 @@ export function DocumentFileBrowser({
                   </div>
                 </div>
 
-                <h3 className="mb-2 line-clamp-1 font-medium">{file.name}</h3>
+                <h3 className="mb-2 line-clamp-1 font-medium">
+                  <Link href={`/documents/${file.id}`} className="hover:underline">
+                    {file.name}
+                  </Link>
+                </h3>
 
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   <Badge variant="secondary">{statusTextMap[file.status]}</Badge>
@@ -792,7 +804,11 @@ export function DocumentFileBrowser({
                           <FileTypeIcon type={visualType} />
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{file.name}</p>
+                          <p className="truncate font-medium">
+                            <Link href={`/documents/${file.id}`} className="hover:underline">
+                              {file.name}
+                            </Link>
+                          </p>
                           <p className="truncate text-muted-foreground text-xs">
                             {fileVisualTypeLabels[visualType]} · {statusTextMap[file.status]}
                           </p>
