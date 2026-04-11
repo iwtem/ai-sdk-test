@@ -158,7 +158,7 @@ export function FolderActionsMenu({
             }}
           />
           {renameError ? <p className="text-destructive text-sm">{renameError}</p> : null}
-          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
               取消
             </Button>
@@ -177,7 +177,7 @@ export function FolderActionsMenu({
               确定删除「{folder.name}」？仅当文件夹为空时可删除。
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>
               取消
             </Button>

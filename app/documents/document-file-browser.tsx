@@ -140,7 +140,7 @@ function FileActionsMenu({
                 「{file.name}」将从数据库与对象存储中永久删除，无法恢复。
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setConfirmPurgeOpen(false)}>
                 取消
               </Button>
@@ -269,7 +269,7 @@ function FileActionsMenu({
               }
             }}
           />
-          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
               取消
             </Button>
@@ -298,7 +298,7 @@ function FileActionsMenu({
               确定删除「{file.name}」？删除后列表中将不再显示（软删除，可在回收站恢复）。
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmDeleteOpen(false)}>
               取消
             </Button>
@@ -889,7 +889,7 @@ export function DocumentFileBrowser({
           {createFolderError ? (
             <p className="text-destructive text-sm">{createFolderError}</p>
           ) : null}
-          <DialogFooter className="border-0 bg-transparent p-0 sm:justify-end">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setCreateFolderOpen(false)}>
               取消
             </Button>
