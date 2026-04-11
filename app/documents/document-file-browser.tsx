@@ -1,5 +1,6 @@
 "use client";
 
+import type { UseInfiniteQueryResult } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowDown,
@@ -37,59 +38,34 @@ import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { FileActionsMenu } from "./document-file-actions";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "./document-file-type";
 import { FolderActionsMenu } from "./document-folder-actions";
+import type { FileSortField } from "./documents-url";
 import { formatBytes, formatDateTime, statusTextMap } from "./format";
-import type { FileItem, FolderListItem, ViewMode } from "./types";
-import type { FileSortField, FileSortOrder } from "./documents-url";
+import type { FileItem, FolderListItem } from "./types";
 import { useFolderMutations } from "./use-document-mutations";
+import type { useDocumentsUrlState } from "./use-documents-page";
 
 type DocumentFileBrowserProps = {
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  trashView: boolean;
-  sortBy: FileSortField;
-  sortOrder: FileSortOrder;
-  onSortByChange: (v: FileSortField) => void;
-  onSortOrderChange: (v: FileSortOrder) => void;
-  hasMoreFiles: boolean;
-  loadingMore: boolean;
-  onLoadMore: () => void;
-  keyword: string;
-  appliedQuery: string;
+  url: ReturnType<typeof useDocumentsUrlState>;
+  keywordDraft: string;
   onKeywordChange: (value: string) => void;
-  onSearch: () => void;
-  loading: boolean;
-  error: string | null;
+  filesQuery: UseInfiniteQueryResult;
   files: FileItem[];
+  error: string | null;
   foldersLoading: boolean;
-  currentFolderId: string | null;
-  breadcrumb: Array<{ id: string; name: string }>;
   subfolders: FolderListItem[];
-  onNavigateToFolder: (folderId: string | null) => void;
+  breadcrumb: Array<{ id: string; name: string }>;
 };
 
 export function DocumentFileBrowser({
-  viewMode,
-  onViewModeChange,
-  trashView,
-  sortBy,
-  sortOrder,
-  onSortByChange,
-  onSortOrderChange,
-  hasMoreFiles,
-  loadingMore,
-  onLoadMore,
-  keyword,
-  appliedQuery,
+  url,
+  keywordDraft,
   onKeywordChange,
-  onSearch,
-  loading,
-  error,
+  filesQuery,
   files,
+  error,
   foldersLoading,
-  currentFolderId,
-  breadcrumb,
   subfolders,
-  onNavigateToFolder,
+  breadcrumb,
 }: DocumentFileBrowserProps) {
   const { createFolder } = useFolderMutations();
 
@@ -98,16 +74,16 @@ export function DocumentFileBrowser({
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
 
   const sortedSubfolders = useMemo(() => {
-    if (trashView) return [];
+    if (url.trashView) return [];
     const list = [...subfolders];
-    const mult = sortOrder === "asc" ? 1 : -1;
-    if (sortBy === "name") {
+    const mult = url.sortOrder === "asc" ? 1 : -1;
+    if (url.sortBy === "name") {
       list.sort((a, b) => mult * a.name.localeCompare(b.name, "zh-CN"));
-    } else if (sortBy === "updatedAt") {
+    } else if (url.sortBy === "updatedAt") {
       list.sort(
         (a, b) => mult * (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()),
       );
-    } else if (sortBy === "createdAt") {
+    } else if (url.sortBy === "createdAt") {
       list.sort(
         (a, b) => mult * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
       );
@@ -115,19 +91,19 @@ export function DocumentFileBrowser({
       list.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
     }
     return list;
-  }, [subfolders, sortBy, sortOrder, trashView]);
+  }, [subfolders, url.sortBy, url.sortOrder, url.trashView]);
 
   const visibleSubfolders = useMemo(() => {
-    if (trashView) return [];
-    const q = appliedQuery.trim().toLowerCase();
+    if (url.trashView) return [];
+    const q = url.q.trim().toLowerCase();
     if (!q) return sortedSubfolders;
     return sortedSubfolders.filter((f) => f.name.toLowerCase().includes(q));
-  }, [sortedSubfolders, appliedQuery, trashView]);
+  }, [sortedSubfolders, url.q, url.trashView]);
 
   const handleCreateFolder = () => {
     setCreateFolderError(null);
     createFolder.mutate(
-      { parentId: currentFolderId, name: newFolderName },
+      { parentId: url.folderId, name: newFolderName },
       {
         onSuccess: () => {
           setNewFolderName("");
@@ -139,16 +115,15 @@ export function DocumentFileBrowser({
   };
 
   const handleSortBy = (field: FileSortField) => {
-    if (sortBy === field) {
-      onSortOrderChange(sortOrder === "asc" ? "desc" : "asc");
+    if (url.sortBy === field) {
+      url.updateUrl({ sortOrder: url.sortOrder === "asc" ? "desc" : "asc" });
       return;
     }
-    onSortByChange(field);
-    if (field === "name") {
-      onSortOrderChange("asc");
-      return;
-    }
-    onSortOrderChange("desc");
+    url.updateUrl({ sortBy: field, sortOrder: field === "name" ? "asc" : "desc" });
+  };
+
+  const handleSearch = () => {
+    url.updateUrl({ q: keywordDraft.trim() });
   };
 
   const sortLabelMap: Record<FileSortField, string> = {
@@ -158,16 +133,18 @@ export function DocumentFileBrowser({
     createdAt: "创建时间",
   };
 
+  const loading = filesQuery.isLoading;
+
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-      {!trashView ? (
+      {!url.trashView ? (
         <div className="flex flex-wrap items-center gap-1 border-border border-b pb-3 text-sm">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-8 px-2 text-muted-foreground"
-            onClick={() => onNavigateToFolder(null)}
+            onClick={() => url.updateUrl({ folderId: null, trashView: false })}
           >
             根目录
           </Button>
@@ -179,7 +156,7 @@ export function DocumentFileBrowser({
                 variant="ghost"
                 size="sm"
                 className={`h-8 px-2 ${index === breadcrumb.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"}`}
-                onClick={() => onNavigateToFolder(crumb.id)}
+                onClick={() => url.updateUrl({ folderId: crumb.id, trashView: false })}
               >
                 {crumb.name}
               </Button>
@@ -194,22 +171,20 @@ export function DocumentFileBrowser({
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={
-                trashView ? "搜索已删除文件名，按 Enter 搜索" : "搜索文件名，按 Enter 搜索"
+                url.trashView ? "搜索已删除文件名，按 Enter 搜索" : "搜索文件名，按 Enter 搜索"
               }
               className="pl-8"
-              value={keyword}
+              value={keywordDraft}
               onChange={(e) => onKeywordChange(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  onSearch();
-                }
+                if (e.key === "Enter") handleSearch();
               }}
             />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
-          {!trashView ? (
+          {!url.trashView ? (
             <Button
               type="button"
               size="sm"
@@ -221,9 +196,9 @@ export function DocumentFileBrowser({
           ) : null}
           <ToggleGroup
             type="single"
-            value={viewMode}
+            value={url.viewMode}
             onValueChange={(v) => {
-              if (v === "card" || v === "list") onViewModeChange(v);
+              if (v === "card" || v === "list") url.updateUrl({ viewMode: v });
             }}
             variant="outline"
             size="sm"
@@ -253,21 +228,21 @@ export function DocumentFileBrowser({
       {!loading &&
       !foldersLoading &&
       files.length === 0 &&
-      (trashView || visibleSubfolders.length === 0) ? (
+      (url.trashView || visibleSubfolders.length === 0) ? (
         <div className="rounded-xl border border-border bg-background px-4 py-12 text-center text-muted-foreground text-sm">
-          {trashView
-            ? !appliedQuery.trim()
+          {url.trashView
+            ? !url.q.trim()
               ? "回收站为空。"
               : "未找到匹配的已删除文件。"
-            : !appliedQuery.trim()
+            : !url.q.trim()
               ? "当前目录下暂无文件与子文件夹，可上传文档或新建文件夹。"
               : "没有匹配的文件或子文件夹，可调整关键词或清空搜索。"}
         </div>
       ) : null}
 
-      {viewMode === "card" ? (
+      {url.viewMode === "card" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {!trashView
+          {!url.trashView
             ? visibleSubfolders.map((folder) => (
                 <article
                   key={`folder-${folder.id}`}
@@ -277,7 +252,7 @@ export function DocumentFileBrowser({
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 flex-col items-start gap-2 text-left"
-                      onClick={() => onNavigateToFolder(folder.id)}
+                      onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
                     >
                       <div className="inline-flex items-center gap-2 text-muted-foreground">
                         <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -294,7 +269,7 @@ export function DocumentFileBrowser({
                     </button>
                     <FolderActionsMenu
                       folder={folder}
-                      currentFolderId={currentFolderId}
+                      currentFolderId={url.folderId}
                       breadcrumb={breadcrumb}
                       subfolders={subfolders}
                     />
@@ -320,9 +295,9 @@ export function DocumentFileBrowser({
                   <div className="flex shrink-0 items-center gap-1">
                     <Badge variant="outline">{formatBytes(file.sizeBytes)}</Badge>
                     <FileActionsMenu
-                      trashView={trashView}
+                      trashView={url.trashView}
                       file={file}
-                      currentFolderId={currentFolderId}
+                      currentFolderId={url.folderId}
                       breadcrumb={breadcrumb}
                       subfolders={subfolders}
                     />
@@ -365,8 +340,8 @@ export function DocumentFileBrowser({
                     disabled={loading}
                   >
                     文件名
-                    {sortBy === "name" ? (
-                      sortOrder === "asc" ? (
+                    {url.sortBy === "name" ? (
+                      url.sortOrder === "asc" ? (
                         <ArrowUp data-icon="inline-end" />
                       ) : (
                         <ArrowDown data-icon="inline-end" />
@@ -386,8 +361,8 @@ export function DocumentFileBrowser({
                     disabled={loading}
                   >
                     大小
-                    {sortBy === "size" ? (
-                      sortOrder === "asc" ? (
+                    {url.sortBy === "size" ? (
+                      url.sortOrder === "asc" ? (
                         <ArrowUp data-icon="inline-end" />
                       ) : (
                         <ArrowDown data-icon="inline-end" />
@@ -407,8 +382,8 @@ export function DocumentFileBrowser({
                     disabled={loading}
                   >
                     更新时间
-                    {sortBy === "updatedAt" ? (
-                      sortOrder === "asc" ? (
+                    {url.sortBy === "updatedAt" ? (
+                      url.sortOrder === "asc" ? (
                         <ArrowUp data-icon="inline-end" />
                       ) : (
                         <ArrowDown data-icon="inline-end" />
@@ -423,7 +398,7 @@ export function DocumentFileBrowser({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!trashView
+              {!url.trashView
                 ? visibleSubfolders.map((folder) => (
                     <TableRow
                       key={`folder-${folder.id}`}
@@ -433,7 +408,7 @@ export function DocumentFileBrowser({
                         <button
                           type="button"
                           className="flex min-w-0 items-center gap-2.5 text-left"
-                          onClick={() => onNavigateToFolder(folder.id)}
+                          onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
                         >
                           <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
                           <div className="min-w-0">
@@ -451,7 +426,7 @@ export function DocumentFileBrowser({
                         <div className="flex justify-center">
                           <FolderActionsMenu
                             folder={folder}
-                            currentFolderId={currentFolderId}
+                            currentFolderId={url.folderId}
                             breadcrumb={breadcrumb}
                             subfolders={subfolders}
                           />
@@ -491,9 +466,9 @@ export function DocumentFileBrowser({
                     <TableCell>
                       <div className="flex justify-center">
                         <FileActionsMenu
-                          trashView={trashView}
+                          trashView={url.trashView}
                           file={file}
-                          currentFolderId={currentFolderId}
+                          currentFolderId={url.folderId}
                           breadcrumb={breadcrumb}
                           subfolders={subfolders}
                         />
@@ -505,21 +480,21 @@ export function DocumentFileBrowser({
             </TableBody>
           </Table>
           <div className="border-border border-t px-3 py-2 text-muted-foreground text-xs">
-            当前按 {sortLabelMap[sortBy]} {sortOrder === "asc" ? "升序" : "降序"} 排序
+            当前按 {sortLabelMap[url.sortBy]} {url.sortOrder === "asc" ? "升序" : "降序"} 排序
           </div>
         </div>
       )}
 
-      {hasMoreFiles ? (
+      {(filesQuery.hasNextPage ?? false) ? (
         <div className="flex justify-center pt-1">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={loadingMore}
-            onClick={onLoadMore}
+            disabled={filesQuery.isFetchingNextPage}
+            onClick={() => void filesQuery.fetchNextPage()}
           >
-            {loadingMore ? "加载中…" : "加载更多"}
+            {filesQuery.isFetchingNextPage ? "加载中…" : "加载更多"}
           </Button>
         </div>
       ) : null}
@@ -527,7 +502,7 @@ export function DocumentFileBrowser({
       <Dialog
         open={createFolderOpen}
         onOpenChange={setCreateFolderOpen}
-        key={currentFolderId ?? "root"}
+        key={url.folderId ?? "root"}
       >
         <DialogContent showCloseButton>
           <DialogHeader>

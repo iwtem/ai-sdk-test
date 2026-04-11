@@ -1,7 +1,6 @@
 "use client";
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileUp, FolderOpen, HardDrive } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -14,8 +13,7 @@ import {
   type DocumentsUrlState,
   parseDocumentsLocation,
 } from "./documents-url";
-import { formatBytes } from "./format";
-import type { FileItem, FolderListItem, UploadTask, ViewMode } from "./types";
+import type { FileItem, FolderListItem, UploadTask } from "./types";
 
 export type { FileSortField, FileSortOrder } from "./documents-url";
 
@@ -23,7 +21,7 @@ export type { FileSortField, FileSortOrder } from "./documents-url";
 // Query key factory
 // ---------------------------------------------------------------------------
 
-const documentsKeys = {
+export const documentsKeys = {
   files: (params: {
     q: string;
     folderId: string | null;
@@ -124,15 +122,37 @@ async function fetchBreadcrumb(
 }
 
 // ---------------------------------------------------------------------------
-// URL helpers
+// URL state hook — parsed URL + updater
 // ---------------------------------------------------------------------------
 
-function useParsedDocumentsUrl(pathname: string) {
+export function useDocumentsUrlState() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  return useMemo(
+
+  const parsed = useMemo(
     () => parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString())),
     [pathname, searchParams],
   );
+
+  const updateUrl = useCallback(
+    (patch: Partial<DocumentsUrlState>) => {
+      router.replace(buildDocumentsHref({ ...parsed, ...patch }), { scroll: false });
+    },
+    [router, parsed],
+  );
+
+  const trashEntryHref = useMemo(
+    () => buildDocumentsHref({ ...parsed, trashView: true, folderId: null, q: "" }),
+    [parsed],
+  );
+
+  const documentsBrowseHref = useMemo(
+    () => (parsed.trashView ? buildDocumentsHref({ ...parsed, trashView: false }) : buildDocumentsHref(parsed)),
+    [parsed],
+  );
+
+  return { ...parsed, updateUrl, trashEntryHref, documentsBrowseHref };
 }
 
 // ---------------------------------------------------------------------------
@@ -141,65 +161,12 @@ function useParsedDocumentsUrl(pathname: string) {
 
 export function useDocumentsPage() {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const parsed = useParsedDocumentsUrl(pathname);
+  const url = useDocumentsUrlState();
 
-  const currentFolderId = parsed.folderId;
-  const trashView = parsed.trashView;
-  const sortBy = parsed.sortBy;
-  const sortOrder = parsed.sortOrder;
-  const viewMode = parsed.viewMode;
-
-  const [keywordDraft, setKeywordDraft] = useState(parsed.q);
+  const [keywordDraft, setKeywordDraft] = useState(url.q);
   useEffect(() => {
-    setKeywordDraft(parsed.q);
-  }, [parsed.q]);
-
-  const commitUrl = useCallback(
-    (next: DocumentsUrlState) => {
-      router.replace(buildDocumentsHref(next), { scroll: false });
-    },
-    [router],
-  );
-
-  const navigateToFolder = useCallback(
-    (folderId: string | null) => {
-      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      commitUrl({ ...prev, folderId, trashView: false });
-    },
-    [pathname, searchParams, commitUrl],
-  );
-
-  const setSortBy = useCallback(
-    (sort: DocumentsUrlState["sortBy"]) => {
-      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      commitUrl({ ...prev, sortBy: sort });
-    },
-    [pathname, searchParams, commitUrl],
-  );
-
-  const setSortOrder = useCallback(
-    (order: DocumentsUrlState["sortOrder"]) => {
-      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      commitUrl({ ...prev, sortOrder: order });
-    },
-    [pathname, searchParams, commitUrl],
-  );
-
-  const setViewMode = useCallback(
-    (mode: ViewMode) => {
-      const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      commitUrl({ ...prev, viewMode: mode });
-    },
-    [pathname, searchParams, commitUrl],
-  );
-
-  const applySearchToUrl = useCallback(() => {
-    const prev = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    commitUrl({ ...prev, q: keywordDraft.trim() });
-  }, [pathname, searchParams, commitUrl, keywordDraft]);
+    setKeywordDraft(url.q);
+  }, [url.q]);
 
   // -------------------------------------------------------------------------
   // Queries
@@ -207,76 +174,61 @@ export function useDocumentsPage() {
 
   const filesQueryParams = useMemo(
     () => ({
-      q: parsed.q,
-      folderId: currentFolderId,
-      trash: trashView,
-      sort: sortBy,
-      order: sortOrder,
+      q: url.q,
+      folderId: url.folderId,
+      trash: url.trashView,
+      sort: url.sortBy,
+      order: url.sortOrder,
     }),
-    [parsed.q, currentFolderId, trashView, sortBy, sortOrder],
+    [url.q, url.folderId, url.trashView, url.sortBy, url.sortOrder],
   );
 
-  const {
-    data: filesData,
-    isLoading: filesLoading,
-    isFetchingNextPage: loadingMore,
-    hasNextPage: hasMoreFiles,
-    fetchNextPage,
-    error: filesError,
-  } = useInfiniteQuery({
+  const filesQuery = useInfiniteQuery({
     queryKey: documentsKeys.files(filesQueryParams),
     queryFn: ({ pageParam = 0 }) =>
       fetchFilesPage({ ...filesQueryParams, offset: pageParam as number }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.page.hasMore) return undefined;
-      const total = allPages.reduce((sum, p) => sum + p.items.length, 0);
-      return total;
+      return allPages.reduce((sum, p) => sum + p.items.length, 0);
     },
   });
 
   const files = useMemo(
-    () => filesData?.pages.flatMap((p) => p.items) ?? [],
-    [filesData],
+    () => filesQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [filesQuery.data],
   );
 
   const stats = useMemo(
     () =>
-      filesData?.pages.at(-1)?.stats ?? {
+      filesQuery.data?.pages.at(-1)?.stats ?? {
         totalCount: 0,
         totalSize: 0,
         weeklyUploaded: 0,
       },
-    [filesData],
+    [filesQuery.data],
   );
 
-  const { data: subfolders = [], isLoading: foldersLoading } = useQuery({
-    queryKey: documentsKeys.folders(currentFolderId),
-    queryFn: () => fetchFolders(currentFolderId),
-    enabled: !trashView,
+  const foldersQuery = useQuery({
+    queryKey: documentsKeys.folders(url.folderId),
+    queryFn: () => fetchFolders(url.folderId),
+    enabled: !url.trashView,
   });
 
-  const { data: breadcrumb = [] } = useQuery({
-    queryKey: documentsKeys.breadcrumb(currentFolderId),
-    queryFn: () => fetchBreadcrumb(currentFolderId),
-    enabled: !!currentFolderId && !trashView,
+  const breadcrumbQuery = useQuery({
+    queryKey: documentsKeys.breadcrumb(url.folderId),
+    queryFn: () => fetchBreadcrumb(url.folderId),
+    enabled: !!url.folderId && !url.trashView,
   });
-
-  const loading = filesLoading;
-  const queryError = filesError
-    ? filesError instanceof Error
-      ? filesError.message
-      : "加载失败"
-    : null;
 
   // -------------------------------------------------------------------------
-  // Upload state (kept as-is – not suitable for react-query)
+  // Upload
   // -------------------------------------------------------------------------
 
   const [uploading, setUploading] = useState(false);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const folderIdRef = useRef<string | null>(null);
-  folderIdRef.current = currentFolderId;
+  folderIdRef.current = url.folderId;
 
   const invalidateAll = useCallback(
     () =>
@@ -325,15 +277,12 @@ export function useDocumentsPage() {
       const folderId = folderIdRef.current;
       try {
         if (!isDocumentUploadAllowed(file.name, file.type || "application/octet-stream")) {
-          updateTask(taskId, {
-            status: "error",
-            message: DOCUMENT_UPLOAD_REJECT_MESSAGE,
-          });
+          updateTask(taskId, { status: "error", message: DOCUMENT_UPLOAD_REJECT_MESSAGE });
           throw new Error(DOCUMENT_UPLOAD_REJECT_MESSAGE);
         }
 
         updateTask(taskId, { status: "uploading", progress: 0, message: undefined });
-        const signResponse = await fetch("/api/files/upload-url", {
+        const signRes = await fetch("/api/files/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -342,18 +291,16 @@ export function useDocumentsPage() {
             ...(folderId ? { folderId } : {}),
           }),
         });
-        if (!signResponse.ok) {
-          const errBody = (await signResponse.json().catch(() => null)) as {
-            message?: string;
-          } | null;
-          throw new Error(errBody?.message || `获取上传地址失败：${signResponse.status}`);
+        if (!signRes.ok) {
+          const err = (await signRes.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(err?.message || `获取上传地址失败：${signRes.status}`);
         }
-        const signData = (await signResponse.json()) as { uploadUrl: string; key: string };
+        const signData = (await signRes.json()) as { uploadUrl: string; key: string };
         const contentType = file.type || "application/octet-stream";
 
         await putFileToSignedUrl(taskId, signData.uploadUrl, file, contentType);
 
-        const completeResponse = await fetch("/api/files/complete", {
+        const completeRes = await fetch("/api/files/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -365,11 +312,9 @@ export function useDocumentsPage() {
             ...(folderId ? { folderId } : {}),
           }),
         });
-        if (!completeResponse.ok) {
-          const errBody = (await completeResponse.json().catch(() => null)) as {
-            message?: string;
-          } | null;
-          throw new Error(errBody?.message || `入库失败：${completeResponse.status}`);
+        if (!completeRes.ok) {
+          const err = (await completeRes.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(err?.message || `入库失败：${completeRes.status}`);
         }
 
         updateTask(taskId, { status: "success", message: "上传成功" });
@@ -388,8 +333,8 @@ export function useDocumentsPage() {
     async (selectedFiles: File[]) => {
       if (selectedFiles.length === 0) return;
 
-      const allowed = selectedFiles.filter((file) =>
-        isDocumentUploadAllowed(file.name, file.type || "application/octet-stream"),
+      const allowed = selectedFiles.filter((f) =>
+        isDocumentUploadAllowed(f.name, f.type || "application/octet-stream"),
       );
       const skipped = selectedFiles.length - allowed.length;
       if (allowed.length === 0) {
@@ -402,28 +347,25 @@ export function useDocumentsPage() {
       }
 
       setUploading(true);
-
-      const tasks = allowed.map((file) => ({
+      const tasks = allowed.map((f) => ({
         id: crypto.randomUUID(),
-        file,
+        file: f,
         progress: 0,
         status: "pending" as const,
       }));
       setUploadTasks((prev) => [...tasks, ...prev].slice(0, 20));
 
       const results = await Promise.allSettled(
-        tasks.map((task) => processSingleFile(task.id, task.file)),
+        tasks.map((t) => processSingleFile(t.id, t.file)),
       );
-      const successCount = results.filter((item) => item.status === "fulfilled").length;
-      const failCount = results.length - successCount;
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const fail = results.length - ok;
 
-      if (successCount > 0) {
+      if (ok > 0) {
         toast.success(
-          `上传完成：成功 ${successCount} 个${failCount ? `，失败 ${failCount} 个` : ""}${
-            skipped > 0 ? `；已跳过 ${skipped} 个非文档` : ""
-          }`,
+          `上传完成：成功 ${ok} 个${fail ? `，失败 ${fail} 个` : ""}${skipped > 0 ? `；已跳过 ${skipped} 个非文档` : ""}`,
         );
-      } else if (failCount > 0) {
+      } else if (fail > 0) {
         toast.error("上传失败，请重试。");
       }
 
@@ -452,7 +394,7 @@ export function useDocumentsPage() {
         await processSingleFile(task.id, task.file);
         await invalidateAll();
       } catch {
-        // error is tracked on task
+        // error tracked on task
       } finally {
         setUploading(false);
       }
@@ -460,76 +402,19 @@ export function useDocumentsPage() {
     [processSingleFile, updateTask, invalidateAll],
   );
 
-  // -------------------------------------------------------------------------
-  // Derived values
-  // -------------------------------------------------------------------------
-
-  const statItems = useMemo(
-    () => [
-      {
-        label: trashView ? "回收站文件" : "文件总数",
-        value: `${stats.totalCount}`,
-        icon: FolderOpen,
-      },
-      { label: "已用空间", value: formatBytes(stats.totalSize), icon: HardDrive },
-      {
-        label: trashView ? "近 7 日删除" : "本周上传",
-        value: `${stats.weeklyUploaded}`,
-        icon: FileUp,
-      },
-    ],
-    [stats, trashView],
-  );
-
-  const loadMoreFiles = useCallback(() => {
-    if (hasMoreFiles && !loadingMore) void fetchNextPage();
-  }, [hasMoreFiles, loadingMore, fetchNextPage]);
-
-  const fetchFiles = useCallback(() => {
-    applySearchToUrl();
-  }, [applySearchToUrl]);
-
-  const trashEntryHref = useMemo(() => {
-    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    return buildDocumentsHref({ ...p, trashView: true, folderId: null, q: "" });
-  }, [pathname, searchParams]);
-
-  const documentsBrowseHref = useMemo(() => {
-    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    if (!p.trashView) return buildDocumentsHref(p);
-    return buildDocumentsHref({ ...p, trashView: false });
-  }, [pathname, searchParams]);
-
   return {
-    viewMode,
-    setViewMode,
-    trashView,
-    trashEntryHref,
-    documentsBrowseHref,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
-    hasMoreFiles: hasMoreFiles ?? false,
-    loadingMore,
-    loadMoreFiles,
-    currentFolderId,
-    navigateToFolder,
-    breadcrumb,
-    subfolders,
-    foldersLoading,
-    keyword: keywordDraft,
-    setKeyword: setKeywordDraft,
-    appliedQuery: parsed.q,
+    url,
+    keywordDraft,
+    setKeywordDraft,
+    filesQuery,
     files,
-    loading,
-    error: queryError,
+    stats,
+    foldersQuery,
+    breadcrumbQuery,
     uploading,
     uploadTasks,
     uploadFiles,
-    fetchFiles,
     handleSelectFile,
     retryTask,
-    statItems,
   };
 }

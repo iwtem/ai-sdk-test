@@ -1,13 +1,15 @@
 "use client";
 
+import { FileUp, FolderOpen, HardDrive } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { DocumentFileBrowser } from "./document-file-browser";
 import { DocumentPageHeader } from "./document-page-header";
 import { DocumentStats } from "./document-stats";
 import { DocumentUploadTasks } from "./document-upload-tasks";
 import { DocumentUploadZone } from "./document-upload-zone";
 import { DOCUMENTS_PATH, DOCUMENTS_TRASH_PATH, normalizeDocumentsPathname } from "./documents-url";
+import { formatBytes } from "./format";
 import { useDocumentsPage } from "./use-documents-page";
 
 /** 将旧 bookmark `/documents?trash=1` 迁到 `/documents/trash?…` */
@@ -45,57 +47,63 @@ export function DocumentsPageFallback({
 
 export function DocumentsPageContent() {
   const {
-    viewMode,
-    setViewMode,
-    trashView,
-    trashEntryHref,
-    documentsBrowseHref,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
-    hasMoreFiles,
-    loadingMore,
-    loadMoreFiles,
-    currentFolderId,
-    navigateToFolder,
-    breadcrumb,
-    subfolders,
-    foldersLoading,
-    keyword,
-    setKeyword,
-    appliedQuery,
+    url,
+    keywordDraft,
+    setKeywordDraft,
+    filesQuery,
     files,
-    loading,
-    error,
+    stats,
+    foldersQuery,
+    breadcrumbQuery,
     uploading,
     uploadTasks,
     uploadFiles,
-    fetchFiles,
     handleSelectFile,
     retryTask,
-    statItems,
   } = useDocumentsPage();
+
+  const filesError = filesQuery.error
+    ? filesQuery.error instanceof Error
+      ? filesQuery.error.message
+      : "加载失败"
+    : null;
+
+  const statItems = useMemo(
+    () => [
+      {
+        label: url.trashView ? "回收站文件" : "文件总数",
+        value: `${stats.totalCount}`,
+        icon: FolderOpen,
+      },
+      { label: "已用空间", value: formatBytes(stats.totalSize), icon: HardDrive },
+      {
+        label: url.trashView ? "近 7 日删除" : "本周上传",
+        value: `${stats.weeklyUploaded}`,
+        icon: FileUp,
+      },
+    ],
+    [stats, url.trashView],
+  );
 
   return (
     <>
       <LegacyTrashQueryRedirect />
       <section className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-          {trashView ? (
-            <DocumentPageHeader variant="trash" documentsBrowseHref={documentsBrowseHref} />
+          {url.trashView ? (
+            <DocumentPageHeader variant="trash" documentsBrowseHref={url.documentsBrowseHref} />
           ) : (
             <>
               <DocumentPageHeader
                 uploading={uploading}
                 onUploadClick={handleSelectFile}
-                trashEntryHref={trashEntryHref}
+                trashEntryHref={url.trashEntryHref}
               />
               <DocumentStats items={statItems} />
             </>
           )}
 
-          {!trashView ? (
+          {!url.trashView ? (
             <>
               <DocumentUploadZone uploading={uploading} onFiles={uploadFiles} />
               <DocumentUploadTasks tasks={uploadTasks} uploading={uploading} onRetry={retryTask} />
@@ -103,28 +111,15 @@ export function DocumentsPageContent() {
           ) : null}
 
           <DocumentFileBrowser
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            trashView={trashView}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSortByChange={setSortBy}
-            onSortOrderChange={setSortOrder}
-            hasMoreFiles={hasMoreFiles}
-            loadingMore={loadingMore}
-            onLoadMore={loadMoreFiles}
-            keyword={keyword}
-            appliedQuery={appliedQuery}
-            onKeywordChange={setKeyword}
-            onSearch={fetchFiles}
-            loading={loading}
-            error={error}
+            url={url}
+            keywordDraft={keywordDraft}
+            onKeywordChange={setKeywordDraft}
+            filesQuery={filesQuery}
             files={files}
-            foldersLoading={foldersLoading}
-            currentFolderId={currentFolderId}
-            breadcrumb={breadcrumb}
-            subfolders={subfolders}
-            onNavigateToFolder={navigateToFolder}
+            error={filesError}
+            foldersLoading={foldersQuery.isLoading}
+            subfolders={foldersQuery.data ?? []}
+            breadcrumb={breadcrumbQuery.data ?? []}
           />
         </div>
       </section>
