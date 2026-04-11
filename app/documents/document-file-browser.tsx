@@ -8,14 +8,9 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
-  Copy,
-  Download,
-  Eye,
   Folder,
   Grid2x2,
   List,
-  MoreVertical,
-  Pencil,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,16 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import {
   Table,
@@ -50,276 +35,13 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import { FileActionsMenu } from "./document-file-actions";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "./document-file-type";
 import { FolderActionsMenu } from "./document-folder-actions";
 import { formatBytes, formatDateTime, statusTextMap } from "./format";
 import type { FileItem, FolderListItem, ViewMode } from "./types";
-import type { FileSortField, FileSortOrder } from "./use-documents-page";
-
-function FileActionsMenu({
-  trashView,
-  file,
-  currentFolderId,
-  breadcrumb,
-  subfolders,
-  movingFileId,
-  deletingFileId,
-  purgingFileId,
-  onMoveFile,
-  onDeleteFile,
-  onRenameFile,
-  onRestore,
-  onPurge,
-  fetchDownloadUrl,
-  flashNotice,
-}: {
-  trashView: boolean;
-  file: FileItem;
-  currentFolderId: string | null;
-  breadcrumb: Array<{ id: string; name: string }>;
-  subfolders: FolderListItem[];
-  movingFileId: string | null;
-  deletingFileId: string | null;
-  purgingFileId: string | null;
-  onMoveFile: (fileId: string, folderId: string | null) => void | Promise<void>;
-  onDeleteFile: (fileId: string) => Promise<boolean>;
-  onRenameFile: (fileId: string, name: string) => Promise<boolean>;
-  onRestore: (fileId: string) => Promise<boolean>;
-  onPurge: (fileId: string) => Promise<boolean>;
-  fetchDownloadUrl: (fileId: string) => Promise<string>;
-  flashNotice: (msg: string) => void;
-}) {
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameValue, setRenameValue] = useState(file.name);
-  const [renaming, setRenaming] = useState(false);
-
-  const parentFolderId =
-    breadcrumb.length >= 2 ? (breadcrumb[breadcrumb.length - 2]?.id ?? null) : null;
-  const inSubfolder = (file.folderId ?? null) !== null;
-  const hasMoveTargets =
-    !trashView && (inSubfolder || currentFolderId !== null || subfolders.length > 0);
-  const showMoveSep = (inSubfolder || currentFolderId !== null) && subfolders.length > 0;
-
-  const busy =
-    movingFileId === file.id || deletingFileId === file.id || purgingFileId === file.id || renaming;
-  const deleting = deletingFileId === file.id;
-  const purging = purgingFileId === file.id;
-
-  if (trashView) {
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 text-muted-foreground"
-              disabled={busy}
-              aria-label="回收站操作"
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => void onRestore(file.id)}>恢复</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => setConfirmPurgeOpen(true)}>
-              彻底删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Dialog open={confirmPurgeOpen} onOpenChange={setConfirmPurgeOpen}>
-          <DialogContent showCloseButton>
-            <DialogHeader>
-              <DialogTitle>彻底删除</DialogTitle>
-              <DialogDescription>
-                「{file.name}」将从数据库与对象存储中永久删除，无法恢复。
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setConfirmPurgeOpen(false)}>
-                取消
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={purging}
-                onClick={() =>
-                  void onPurge(file.id).then((ok) => {
-                    if (ok) setConfirmPurgeOpen(false);
-                  })
-                }
-              >
-                {purging ? "删除中…" : "彻底删除"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0 text-muted-foreground"
-            disabled={busy}
-            aria-label="文件操作"
-          >
-            <MoreVertical className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem
-            onClick={() =>
-              void fetchDownloadUrl(file.id).then((url) => {
-                window.open(url, "_blank", "noopener,noreferrer");
-              })
-            }
-          >
-            <Download className="size-4" />
-            下载
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href={`/documents/${file.id}`}>
-              <Eye className="size-4" />
-              查看详情
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              void fetchDownloadUrl(file.id).then((url) => {
-                void navigator.clipboard.writeText(url).then(() => {
-                  flashNotice("下载链接已复制（短期内有效）");
-                });
-              })
-            }
-          >
-            <Copy className="size-4" />
-            复制下载链接
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              setRenameValue(file.name);
-              setRenameOpen(true);
-            }}
-          >
-            <Pencil className="size-4" />
-            重命名
-          </DropdownMenuItem>
-          {hasMoveTargets ? <DropdownMenuSeparator /> : null}
-          {hasMoveTargets ? (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>移动到…</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-52">
-                {inSubfolder ? (
-                  <DropdownMenuItem onClick={() => void onMoveFile(file.id, null)}>
-                    根目录
-                  </DropdownMenuItem>
-                ) : null}
-                {currentFolderId !== null ? (
-                  <DropdownMenuItem onClick={() => void onMoveFile(file.id, parentFolderId)}>
-                    上级目录
-                  </DropdownMenuItem>
-                ) : null}
-                {showMoveSep ? <DropdownMenuSeparator /> : null}
-                {subfolders.map((folder) => (
-                  <DropdownMenuItem
-                    key={folder.id}
-                    onClick={() => void onMoveFile(file.id, folder.id)}
-                  >
-                    <span className="truncate">{folder.name}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setConfirmDeleteOpen(true)}>
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent showCloseButton>
-          <DialogHeader>
-            <DialogTitle>重命名文件</DialogTitle>
-            <DialogDescription>修改展示名称（扩展名会随文件名更新）。</DialogDescription>
-          </DialogHeader>
-          <Input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setRenaming(true);
-                void onRenameFile(file.id, renameValue).then((ok) => {
-                  setRenaming(false);
-                  if (ok) setRenameOpen(false);
-                });
-              }
-            }}
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
-              取消
-            </Button>
-            <Button
-              type="button"
-              disabled={renaming}
-              onClick={() => {
-                setRenaming(true);
-                void onRenameFile(file.id, renameValue).then((ok) => {
-                  setRenaming(false);
-                  if (ok) setRenameOpen(false);
-                });
-              }}
-            >
-              {renaming ? "保存中…" : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <DialogContent showCloseButton>
-          <DialogHeader>
-            <DialogTitle>删除文件</DialogTitle>
-            <DialogDescription>
-              确定删除「{file.name}」？删除后列表中将不再显示（软删除，可在回收站恢复）。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmDeleteOpen(false)}>
-              取消
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={deleting}
-              onClick={() =>
-                void onDeleteFile(file.id).then((ok) => {
-                  if (ok) setConfirmDeleteOpen(false);
-                })
-              }
-            >
-              {deleting ? "删除中…" : "删除"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
+import type { FileSortField, FileSortOrder } from "./documents-url";
+import { useFolderMutations } from "./use-document-mutations";
 
 type DocumentFileBrowserProps = {
   viewMode: ViewMode;
@@ -333,7 +55,6 @@ type DocumentFileBrowserProps = {
   loadingMore: boolean;
   onLoadMore: () => void;
   keyword: string;
-  /** 已提交到 URL 的搜索词，用于与文件列表对齐并过滤子文件夹 */
   appliedQuery: string;
   onKeywordChange: (value: string) => void;
   onSearch: () => void;
@@ -345,24 +66,7 @@ type DocumentFileBrowserProps = {
   currentFolderId: string | null;
   breadcrumb: Array<{ id: string; name: string }>;
   subfolders: FolderListItem[];
-  onMoveFile: (fileId: string, folderId: string | null) => void | Promise<void>;
-  movingFileId: string | null;
-  onDeleteFile: (fileId: string) => Promise<boolean>;
-  deletingFileId: string | null;
-  onRenameFile: (fileId: string, name: string) => Promise<boolean>;
-  onRestoreFile: (fileId: string) => Promise<boolean>;
-  onPurgeFile: (fileId: string) => Promise<boolean>;
-  purgingFileId: string | null;
-  fetchDownloadUrl: (fileId: string) => Promise<string>;
-  flashNotice: (msg: string) => void;
   onNavigateToFolder: (folderId: string | null) => void;
-  onRenameFolder: (folderId: string, name: string) => Promise<{ ok: boolean; message?: string }>;
-  onMoveFolder: (
-    folderId: string,
-    newParentId: string | null,
-  ) => Promise<{ ok: boolean; message?: string }>;
-  onDeleteFolder: (folderId: string) => Promise<boolean>;
-  onCreateFolder: (name: string) => Promise<{ ok: boolean; message?: string }>;
 };
 
 export function DocumentFileBrowser({
@@ -388,25 +92,12 @@ export function DocumentFileBrowser({
   currentFolderId,
   breadcrumb,
   subfolders,
-  onMoveFile,
-  movingFileId,
-  onDeleteFile,
-  deletingFileId,
-  onRenameFile,
-  onRestoreFile,
-  onPurgeFile,
-  purgingFileId,
-  fetchDownloadUrl,
-  flashNotice,
   onNavigateToFolder,
-  onRenameFolder,
-  onMoveFolder,
-  onDeleteFolder,
-  onCreateFolder,
 }: DocumentFileBrowserProps) {
+  const { createFolder } = useFolderMutations();
+
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
-  const [creatingFolder, setCreatingFolder] = useState(false);
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
 
   const sortedSubfolders = useMemo(() => {
@@ -436,17 +127,18 @@ export function DocumentFileBrowser({
     return sortedSubfolders.filter((f) => f.name.toLowerCase().includes(q));
   }, [sortedSubfolders, appliedQuery, trashView]);
 
-  const handleCreateFolder = async () => {
-    setCreatingFolder(true);
+  const handleCreateFolder = () => {
     setCreateFolderError(null);
-    const result = await onCreateFolder(newFolderName);
-    setCreatingFolder(false);
-    if (result.ok) {
-      setNewFolderName("");
-      setCreateFolderOpen(false);
-    } else {
-      setCreateFolderError(result.message ?? "创建失败");
-    }
+    createFolder.mutate(
+      { parentId: currentFolderId, name: newFolderName },
+      {
+        onSuccess: () => {
+          setNewFolderName("");
+          setCreateFolderOpen(false);
+        },
+        onError: (err) => setCreateFolderError(err instanceof Error ? err.message : "创建失败"),
+      },
+    );
   };
 
   const handleSortBy = (field: FileSortField) => {
@@ -615,9 +307,6 @@ export function DocumentFileBrowser({
                       currentFolderId={currentFolderId}
                       breadcrumb={breadcrumb}
                       subfolders={subfolders}
-                      onRenameFolder={onRenameFolder}
-                      onMoveFolder={onMoveFolder}
-                      onDeleteFolder={onDeleteFolder}
                     />
                   </div>
                 </article>
@@ -646,16 +335,6 @@ export function DocumentFileBrowser({
                       currentFolderId={currentFolderId}
                       breadcrumb={breadcrumb}
                       subfolders={subfolders}
-                      movingFileId={movingFileId}
-                      deletingFileId={deletingFileId}
-                      purgingFileId={purgingFileId}
-                      onMoveFile={onMoveFile}
-                      onDeleteFile={onDeleteFile}
-                      onRenameFile={onRenameFile}
-                      onRestore={onRestoreFile}
-                      onPurge={onPurgeFile}
-                      fetchDownloadUrl={fetchDownloadUrl}
-                      flashNotice={flashNotice}
                     />
                   </div>
                 </div>
@@ -785,9 +464,6 @@ export function DocumentFileBrowser({
                             currentFolderId={currentFolderId}
                             breadcrumb={breadcrumb}
                             subfolders={subfolders}
-                            onRenameFolder={onRenameFolder}
-                            onMoveFolder={onMoveFolder}
-                            onDeleteFolder={onDeleteFolder}
                           />
                         </div>
                       </TableCell>
@@ -830,16 +506,6 @@ export function DocumentFileBrowser({
                           currentFolderId={currentFolderId}
                           breadcrumb={breadcrumb}
                           subfolders={subfolders}
-                          movingFileId={movingFileId}
-                          deletingFileId={deletingFileId}
-                          purgingFileId={purgingFileId}
-                          onMoveFile={onMoveFile}
-                          onDeleteFile={onDeleteFile}
-                          onRenameFile={onRenameFile}
-                          onRestore={onRestoreFile}
-                          onPurge={onPurgeFile}
-                          fetchDownloadUrl={fetchDownloadUrl}
-                          flashNotice={flashNotice}
                         />
                       </div>
                     </TableCell>
@@ -883,7 +549,7 @@ export function DocumentFileBrowser({
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void handleCreateFolder();
+              if (e.key === "Enter") handleCreateFolder();
             }}
           />
           {createFolderError ? (
@@ -895,10 +561,10 @@ export function DocumentFileBrowser({
             </Button>
             <Button
               type="button"
-              onClick={() => void handleCreateFolder()}
-              disabled={creatingFolder}
+              onClick={handleCreateFolder}
+              disabled={createFolder.isPending}
             >
-              {creatingFolder ? "创建中…" : "创建"}
+              {createFolder.isPending ? "创建中…" : "创建"}
             </Button>
           </DialogFooter>
         </DialogContent>

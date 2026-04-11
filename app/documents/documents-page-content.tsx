@@ -62,10 +62,6 @@ export function DocumentsPageContent() {
     breadcrumb,
     subfolders,
     foldersLoading,
-    createFolder,
-    renameFolder,
-    moveFolder,
-    deleteFolder,
     keyword,
     setKeyword,
     appliedQuery,
@@ -84,16 +80,6 @@ export function DocumentsPageContent() {
     handleDrop,
     retryTask,
     statItems,
-    moveFile,
-    movingFileId,
-    deleteFile,
-    deletingFileId,
-    renameFile,
-    restoreFile,
-    purgeFile,
-    purgingFileId,
-    fetchDownloadUrl,
-    flashNotice,
   } = useDocumentsPage();
 
   return (
@@ -153,21 +139,7 @@ export function DocumentsPageContent() {
             currentFolderId={currentFolderId}
             breadcrumb={breadcrumb}
             subfolders={subfolders}
-            onMoveFile={moveFile}
-            movingFileId={movingFileId}
-            onDeleteFile={deleteFile}
-            deletingFileId={deletingFileId}
-            onRenameFile={renameFile}
-            onRestoreFile={restoreFile}
-            onPurgeFile={purgeFile}
-            purgingFileId={purgingFileId}
-            fetchDownloadUrl={fetchDownloadUrl}
-            flashNotice={flashNotice}
             onNavigateToFolder={navigateToFolder}
-            onRenameFolder={renameFolder}
-            onMoveFolder={moveFolder}
-            onDeleteFolder={deleteFolder}
-            onCreateFolder={createFolder}
           />
         </div>
       </section>

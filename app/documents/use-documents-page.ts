@@ -1,6 +1,6 @@
 "use client";
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FolderOpen, HardDrive } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -120,16 +120,6 @@ async function fetchBreadcrumb(
   if (!res.ok) return [];
   const data = (await res.json()) as { breadcrumb: Array<{ id: string; name: string }> };
   return data.breadcrumb;
-}
-
-async function apiFetch<T = unknown>(
-  url: string,
-  init?: RequestInit,
-): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
-  const res = await fetch(url, init);
-  const body = (await res.json().catch(() => ({}))) as T & { message?: string };
-  if (!res.ok) return { ok: false, message: body.message || `请求失败：${res.status}` };
-  return { ok: true, data: body };
 }
 
 // ---------------------------------------------------------------------------
@@ -279,40 +269,27 @@ export function useDocumentsPage() {
     : null;
 
   // -------------------------------------------------------------------------
-  // Invalidation helpers
-  // -------------------------------------------------------------------------
-
-  const invalidateFiles = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ["files"] }),
-    [queryClient],
-  );
-
-  const invalidateFolders = useCallback(
-    () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["folders"] }),
-        queryClient.invalidateQueries({ queryKey: ["breadcrumb"] }),
-      ]),
-    [queryClient],
-  );
-
-  const invalidateAll = useCallback(
-    () => Promise.all([invalidateFiles(), invalidateFolders()]),
-    [invalidateFiles, invalidateFolders],
-  );
-
-  // -------------------------------------------------------------------------
   // Upload state (kept as-is – not suitable for react-query)
   // -------------------------------------------------------------------------
 
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderIdRef = useRef<string | null>(null);
   folderIdRef.current = currentFolderId;
+
+  const invalidateAll = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["files"] }),
+        queryClient.invalidateQueries({ queryKey: ["folders"] }),
+        queryClient.invalidateQueries({ queryKey: ["breadcrumb"] }),
+      ]),
+    [queryClient],
+  );
 
   const updateTask = useCallback((taskId: string, patch: Partial<UploadTask>) => {
     setUploadTasks((prev) =>
@@ -419,7 +396,7 @@ export function useDocumentsPage() {
       );
       const skipped = selectedFiles.length - allowed.length;
       if (allowed.length === 0) {
-        setError(
+        setUploadError(
           skipped > 0
             ? `${DOCUMENT_UPLOAD_REJECT_MESSAGE}（共 ${skipped} 个文件）`
             : DOCUMENT_UPLOAD_REJECT_MESSAGE,
@@ -428,7 +405,7 @@ export function useDocumentsPage() {
       }
 
       setUploading(true);
-      setError(null);
+      setUploadError(null);
       setUploadMessage(null);
 
       const tasks = allowed.map((file) => ({
@@ -452,7 +429,7 @@ export function useDocumentsPage() {
           }`,
         );
       } else if (failCount > 0) {
-        setError("上传失败，请重试。");
+        setUploadError("上传失败，请重试。");
       }
 
       await invalidateAll();
@@ -503,262 +480,6 @@ export function useDocumentsPage() {
   );
 
   // -------------------------------------------------------------------------
-  // Mutations
-  // -------------------------------------------------------------------------
-
-  const createFolderMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
-      const result = await apiFetch("/api/folders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId: currentFolderId, name: trimmed }),
-      });
-      if (!result.ok) return { ok: false as const, message: result.message };
-      return { ok: true as const };
-    },
-    onSuccess: (result) => {
-      if (result.ok) void invalidateFolders();
-    },
-  });
-
-  const renameFolderMutation = useMutation({
-    mutationFn: async ({ folderId, name }: { folderId: string; name: string }) => {
-      const trimmed = name.trim();
-      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
-      const result = await apiFetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!result.ok) return { ok: false as const, message: result.message };
-      return { ok: true as const };
-    },
-    onSuccess: (result) => {
-      if (result.ok) void invalidateFolders();
-    },
-  });
-
-  const moveFolderMutation = useMutation({
-    mutationFn: async ({
-      folderId,
-      newParentId,
-    }: {
-      folderId: string;
-      newParentId: string | null;
-    }) => {
-      const result = await apiFetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId: newParentId }),
-      });
-      if (!result.ok) {
-        setError(result.message);
-        return { ok: false as const, message: result.message };
-      }
-      return { ok: true as const };
-    },
-    onSuccess: (result) => {
-      if (result.ok) void invalidateFolders();
-    },
-  });
-
-  const deleteFolderMutation = useMutation({
-    mutationFn: async (folderId: string) => {
-      const result = await apiFetch(`/api/folders/${folderId}`, { method: "DELETE" });
-      if (!result.ok) {
-        setError(result.message);
-        return false;
-      }
-      return true;
-    },
-    onSuccess: (ok) => {
-      if (ok) void invalidateFolders();
-    },
-  });
-
-  const [movingFileId, setMovingFileId] = useState<string | null>(null);
-  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
-  const [purgingFileId, setPurgingFileId] = useState<string | null>(null);
-
-  const moveFileMutation = useMutation({
-    mutationFn: async ({
-      fileId,
-      targetFolderId,
-    }: {
-      fileId: string;
-      targetFolderId: string | null;
-    }) => {
-      setMovingFileId(fileId);
-      setError(null);
-      const result = await apiFetch(`/api/files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderId: targetFolderId }),
-      });
-      if (!result.ok) {
-        setError(result.message);
-      }
-      return result.ok;
-    },
-    onSettled: () => {
-      setMovingFileId(null);
-      void invalidateFiles();
-    },
-  });
-
-  const renameFileMutation = useMutation({
-    mutationFn: async ({ fileId, name }: { fileId: string; name: string }) => {
-      const trimmed = name.trim();
-      if (!trimmed) {
-        setError("文件名不能为空");
-        return false;
-      }
-      setError(null);
-      const result = await apiFetch(`/api/files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!result.ok) {
-        setError(result.message);
-        return false;
-      }
-      return true;
-    },
-    onSuccess: (ok) => {
-      if (ok) void invalidateFiles();
-    },
-  });
-
-  const deleteFileMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      setDeletingFileId(fileId);
-      setError(null);
-      const result = await apiFetch(`/api/files/${fileId}`, { method: "DELETE" });
-      if (!result.ok) {
-        setError(result.message);
-        return false;
-      }
-      return true;
-    },
-    onSettled: () => {
-      setDeletingFileId(null);
-      void invalidateFiles();
-    },
-  });
-
-  const restoreFileMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      setError(null);
-      const result = await apiFetch(`/api/files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restore: true }),
-      });
-      if (!result.ok) {
-        setError(result.message);
-        return false;
-      }
-      return true;
-    },
-    onSuccess: (ok) => {
-      if (ok) void invalidateFiles();
-    },
-  });
-
-  const purgeFileMutation = useMutation({
-    mutationFn: async (fileId: string) => {
-      setPurgingFileId(fileId);
-      setError(null);
-      const result = await apiFetch(`/api/files/${fileId}/purge`, { method: "POST" });
-      if (!result.ok) {
-        setError(result.message);
-        return false;
-      }
-      return true;
-    },
-    onSettled: () => {
-      setPurgingFileId(null);
-      void invalidateFiles();
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Wrappers to preserve the existing return API
-  // -------------------------------------------------------------------------
-
-  const createFolder = useCallback(
-    (name: string) => createFolderMutation.mutateAsync(name),
-    [createFolderMutation],
-  );
-
-  const renameFolder = useCallback(
-    (folderId: string, name: string) =>
-      renameFolderMutation.mutateAsync({ folderId, name }),
-    [renameFolderMutation],
-  );
-
-  const moveFolder = useCallback(
-    (folderId: string, newParentId: string | null) =>
-      moveFolderMutation.mutateAsync({ folderId, newParentId }),
-    [moveFolderMutation],
-  );
-
-  const deleteFolder = useCallback(
-    (folderId: string) => deleteFolderMutation.mutateAsync(folderId),
-    [deleteFolderMutation],
-  );
-
-  const moveFile = useCallback(
-    (fileId: string, targetFolderId: string | null) =>
-      moveFileMutation.mutateAsync({ fileId, targetFolderId }).then(() => {}),
-    [moveFileMutation],
-  );
-
-  const renameFile = useCallback(
-    (fileId: string, name: string) => renameFileMutation.mutateAsync({ fileId, name }),
-    [renameFileMutation],
-  );
-
-  const deleteFile = useCallback(
-    (fileId: string) => deleteFileMutation.mutateAsync(fileId),
-    [deleteFileMutation],
-  );
-
-  const restoreFile = useCallback(
-    (fileId: string) => restoreFileMutation.mutateAsync(fileId),
-    [restoreFileMutation],
-  );
-
-  const purgeFile = useCallback(
-    (fileId: string) => purgeFileMutation.mutateAsync(fileId),
-    [purgeFileMutation],
-  );
-
-  const fetchDownloadUrl = useCallback(async (fileId: string) => {
-    const res = await fetch(`/api/files/${fileId}/download-url`);
-    const body = (await res.json().catch(() => ({}))) as {
-      message?: string;
-      downloadUrl?: string;
-    };
-    if (!res.ok) {
-      throw new Error(body.message || `获取下载链接失败：${res.status}`);
-    }
-    if (!body.downloadUrl) throw new Error("无下载地址");
-    return body.downloadUrl;
-  }, []);
-
-  const flashNotice = useCallback((msg: string) => {
-    setUploadMessage(msg);
-  }, []);
-
-  const loadMoreFiles = useCallback(() => {
-    if (hasMoreFiles && !loadingMore) void fetchNextPage();
-  }, [hasMoreFiles, loadingMore, fetchNextPage]);
-
-  // -------------------------------------------------------------------------
   // Derived values
   // -------------------------------------------------------------------------
 
@@ -779,6 +500,10 @@ export function useDocumentsPage() {
     [stats, trashView],
   );
 
+  const loadMoreFiles = useCallback(() => {
+    if (hasMoreFiles && !loadingMore) void fetchNextPage();
+  }, [hasMoreFiles, loadingMore, fetchNextPage]);
+
   const fetchFiles = useCallback(() => {
     applySearchToUrl();
   }, [applySearchToUrl]);
@@ -794,8 +519,7 @@ export function useDocumentsPage() {
     return buildDocumentsHref({ ...p, trashView: false });
   }, [pathname, searchParams]);
 
-  // Combine query error with mutation/upload error
-  const combinedError = error || queryError;
+  const combinedError = uploadError || queryError;
 
   return {
     viewMode,
@@ -815,10 +539,6 @@ export function useDocumentsPage() {
     breadcrumb,
     subfolders,
     foldersLoading,
-    createFolder,
-    renameFolder,
-    moveFolder,
-    deleteFolder,
     keyword: keywordDraft,
     setKeyword: setKeywordDraft,
     appliedQuery: parsed.q,
@@ -826,7 +546,6 @@ export function useDocumentsPage() {
     loading,
     error: combinedError,
     uploadMessage,
-    stats,
     uploading,
     dragging,
     setDragging,
@@ -838,15 +557,5 @@ export function useDocumentsPage() {
     handleDrop,
     retryTask,
     statItems,
-    moveFile,
-    movingFileId,
-    deleteFile,
-    deletingFileId,
-    renameFile,
-    restoreFile,
-    purgeFile,
-    purgingFileId,
-    fetchDownloadUrl,
-    flashNotice,
   };
 }
