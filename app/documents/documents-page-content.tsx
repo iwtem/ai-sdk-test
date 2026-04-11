@@ -68,16 +68,11 @@ export function DocumentsPageContent() {
     files,
     loading,
     error,
-    uploadMessage,
     uploading,
-    dragging,
-    setDragging,
     uploadTasks,
-    fileInputRef,
+    uploadFiles,
     fetchFiles,
     handleSelectFile,
-    handleFileInputChange,
-    handleDrop,
     retryTask,
     statItems,
   } = useDocumentsPage();
@@ -102,16 +97,7 @@ export function DocumentsPageContent() {
 
           {!trashView ? (
             <>
-              <DocumentUploadZone
-                dragging={dragging}
-                setDragging={setDragging}
-                uploading={uploading}
-                fileInputRef={fileInputRef}
-                onFileInputChange={handleFileInputChange}
-                onSelectClick={handleSelectFile}
-                onDrop={handleDrop}
-              />
-
+              <DocumentUploadZone uploading={uploading} onFiles={uploadFiles} />
               <DocumentUploadTasks tasks={uploadTasks} uploading={uploading} onRetry={retryTask} />
             </>
           ) : null}
@@ -133,7 +119,6 @@ export function DocumentsPageContent() {
             onSearch={fetchFiles}
             loading={loading}
             error={error}
-            uploadMessage={uploadMessage}
             files={files}
             foldersLoading={foldersLoading}
             currentFolderId={currentFolderId}

@@ -6,7 +6,6 @@ import {
   ArrowUp,
   ArrowUpDown,
   CalendarDays,
-  CheckCircle2,
   ChevronRight,
   Folder,
   Grid2x2,
@@ -60,7 +59,6 @@ type DocumentFileBrowserProps = {
   onSearch: () => void;
   loading: boolean;
   error: string | null;
-  uploadMessage: string | null;
   files: FileItem[];
   foldersLoading: boolean;
   currentFolderId: string | null;
@@ -86,7 +84,6 @@ export function DocumentFileBrowser({
   onSearch,
   loading,
   error,
-  uploadMessage,
   files,
   foldersLoading,
   currentFolderId,
@@ -250,13 +247,6 @@ export function DocumentFileBrowser({
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
           <AlertCircle className="size-4" />
           {error}
-        </div>
-      ) : null}
-
-      {!trashView && uploadMessage ? (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-emerald-700 text-sm dark:text-emerald-300">
-          <CheckCircle2 className="size-4" />
-          {uploadMessage}
         </div>
       ) : null}
 

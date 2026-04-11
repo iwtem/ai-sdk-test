@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -159,7 +160,9 @@ export function FileActionsMenu({
           <DropdownMenuItem
             onClick={() =>
               void fetchDownloadUrl(file.id).then((url) => {
-                void navigator.clipboard.writeText(url);
+                void navigator.clipboard.writeText(url).then(() => {
+                  toast.success("下载链接已复制（短期内有效）");
+                });
               })
             }
           >

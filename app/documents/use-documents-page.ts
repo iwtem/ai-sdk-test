@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { FileUp, FolderOpen, HardDrive } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
   isDocumentUploadAllowed,
@@ -273,11 +274,7 @@ export function useDocumentsPage() {
   // -------------------------------------------------------------------------
 
   const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderIdRef = useRef<string | null>(null);
   folderIdRef.current = currentFolderId;
 
@@ -396,7 +393,7 @@ export function useDocumentsPage() {
       );
       const skipped = selectedFiles.length - allowed.length;
       if (allowed.length === 0) {
-        setUploadError(
+        toast.error(
           skipped > 0
             ? `${DOCUMENT_UPLOAD_REJECT_MESSAGE}（共 ${skipped} 个文件）`
             : DOCUMENT_UPLOAD_REJECT_MESSAGE,
@@ -405,8 +402,6 @@ export function useDocumentsPage() {
       }
 
       setUploading(true);
-      setUploadError(null);
-      setUploadMessage(null);
 
       const tasks = allowed.map((file) => ({
         id: crypto.randomUUID(),
@@ -423,13 +418,13 @@ export function useDocumentsPage() {
       const failCount = results.length - successCount;
 
       if (successCount > 0) {
-        setUploadMessage(
+        toast.success(
           `上传完成：成功 ${successCount} 个${failCount ? `，失败 ${failCount} 个` : ""}${
             skipped > 0 ? `；已跳过 ${skipped} 个非文档` : ""
           }`,
         );
       } else if (failCount > 0) {
-        setUploadError("上传失败，请重试。");
+        toast.error("上传失败，请重试。");
       }
 
       await invalidateAll();
@@ -439,29 +434,15 @@ export function useDocumentsPage() {
   );
 
   const handleSelectFile = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleFileInputChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = Array.from(event.target.files ?? []);
-      if (selected.length === 0) return;
-      await uploadFiles(selected);
-      event.target.value = "";
-    },
-    [uploadFiles],
-  );
-
-  const handleDrop = useCallback(
-    async (event: React.DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      setDragging(false);
-      const selected = Array.from(event.dataTransfer.files ?? []);
-      if (selected.length === 0) return;
-      await uploadFiles(selected);
-    },
-    [uploadFiles],
-  );
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.onchange = () => {
+      const selected = Array.from(input.files ?? []);
+      if (selected.length > 0) void uploadFiles(selected);
+    };
+    input.click();
+  }, [uploadFiles]);
 
   const retryTask = useCallback(
     async (task: UploadTask) => {
@@ -519,8 +500,6 @@ export function useDocumentsPage() {
     return buildDocumentsHref({ ...p, trashView: false });
   }, [pathname, searchParams]);
 
-  const combinedError = uploadError || queryError;
-
   return {
     viewMode,
     setViewMode,
@@ -544,17 +523,12 @@ export function useDocumentsPage() {
     appliedQuery: parsed.q,
     files,
     loading,
-    error: combinedError,
-    uploadMessage,
+    error: queryError,
     uploading,
-    dragging,
-    setDragging,
     uploadTasks,
-    fileInputRef,
+    uploadFiles,
     fetchFiles,
     handleSelectFile,
-    handleFileInputChange,
-    handleDrop,
     retryTask,
     statItems,
   };
