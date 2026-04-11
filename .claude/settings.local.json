@@ -5,7 +5,8 @@
       "WebSearch",
       "Bash(findstr onlyoffice:*)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(dir /s /b *.tsx *.ts)"
     ]
   }
 }

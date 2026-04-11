@@ -1,5 +1,6 @@
 "use client";
 
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, FolderOpen, HardDrive } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +17,26 @@ import { formatBytes } from "./format";
 import type { FileItem, FolderListItem, UploadTask, ViewMode } from "./types";
 
 export type { FileSortField, FileSortOrder } from "./documents-url";
+
+// ---------------------------------------------------------------------------
+// Query key factory
+// ---------------------------------------------------------------------------
+
+const documentsKeys = {
+  files: (params: {
+    q: string;
+    folderId: string | null;
+    trash: boolean;
+    sort: string;
+    order: string;
+  }) => ["files", params] as const,
+  folders: (parentId: string | null) => ["folders", parentId] as const,
+  breadcrumb: (folderId: string | null) => ["breadcrumb", folderId] as const,
+};
+
+// ---------------------------------------------------------------------------
+// API helpers
+// ---------------------------------------------------------------------------
 
 function mapFileItems(
   items: Array<{
@@ -43,7 +64,78 @@ function mapFileItems(
   }));
 }
 
-/** URL 解析随 pathname + searchParams 更新；浏览器后退/前进会触发重渲染并同步列表。 */
+type FilesPage = {
+  items: FileItem[];
+  stats: { totalCount: number; totalSize: number; weeklyUploaded: number };
+  page: { hasMore: boolean };
+};
+
+async function fetchFilesPage(params: {
+  q: string;
+  folderId: string | null;
+  trash: boolean;
+  sort: string;
+  order: string;
+  offset: number;
+}): Promise<FilesPage> {
+  const sp = new URLSearchParams();
+  if (params.trash) {
+    sp.set("trash", "true");
+    if (params.q.trim()) sp.set("q", params.q.trim());
+  } else {
+    if (params.q.trim()) sp.set("q", params.q.trim());
+    if (params.folderId) sp.set("folderId", params.folderId);
+  }
+  sp.set("limit", "50");
+  sp.set("offset", String(params.offset));
+  sp.set("sort", params.sort);
+  sp.set("order", params.order);
+
+  const res = await fetch(`/api/files?${sp.toString()}`);
+  if (!res.ok) throw new Error(`请求失败：${res.status}`);
+
+  const data = (await res.json()) as {
+    items: Parameters<typeof mapFileItems>[0];
+    stats: FilesPage["stats"];
+    page: { hasMore: boolean };
+  };
+
+  return { items: mapFileItems(data.items), stats: data.stats, page: data.page };
+}
+
+async function fetchFolders(parentId: string | null): Promise<FolderListItem[]> {
+  const sp = new URLSearchParams();
+  if (parentId) sp.set("parentId", parentId);
+  const res = await fetch(`/api/folders?${sp.toString()}`);
+  if (!res.ok) throw new Error(`加载文件夹失败：${res.status}`);
+  const data = (await res.json()) as { items: FolderListItem[] };
+  return data.items;
+}
+
+async function fetchBreadcrumb(
+  folderId: string | null,
+): Promise<Array<{ id: string; name: string }>> {
+  if (!folderId) return [];
+  const res = await fetch(`/api/folders/${folderId}`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { breadcrumb: Array<{ id: string; name: string }> };
+  return data.breadcrumb;
+}
+
+async function apiFetch<T = unknown>(
+  url: string,
+  init?: RequestInit,
+): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
+  const res = await fetch(url, init);
+  const body = (await res.json().catch(() => ({}))) as T & { message?: string };
+  if (!res.ok) return { ok: false, message: body.message || `请求失败：${res.status}` };
+  return { ok: true, data: body };
+}
+
+// ---------------------------------------------------------------------------
+// URL helpers
+// ---------------------------------------------------------------------------
+
 function useParsedDocumentsUrl(pathname: string) {
   const searchParams = useSearchParams();
   return useMemo(
@@ -52,7 +144,12 @@ function useParsedDocumentsUrl(pathname: string) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main hook
+// ---------------------------------------------------------------------------
+
 export function useDocumentsPage() {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -113,264 +210,109 @@ export function useDocumentsPage() {
     commitUrl({ ...prev, q: keywordDraft.trim() });
   }, [pathname, searchParams, commitUrl, keywordDraft]);
 
-  const [breadcrumb, setBreadcrumb] = useState<Array<{ id: string; name: string }>>([]);
-  const [subfolders, setSubfolders] = useState<FolderListItem[]>([]);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const filesRef = useRef<FileItem[]>([]);
-  filesRef.current = files;
-  const [hasMoreFiles, setHasMoreFiles] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [foldersLoading, setFoldersLoading] = useState(false);
+  // -------------------------------------------------------------------------
+  // Queries
+  // -------------------------------------------------------------------------
+
+  const filesQueryParams = useMemo(
+    () => ({
+      q: parsed.q,
+      folderId: currentFolderId,
+      trash: trashView,
+      sort: sortBy,
+      order: sortOrder,
+    }),
+    [parsed.q, currentFolderId, trashView, sortBy, sortOrder],
+  );
+
+  const {
+    data: filesData,
+    isLoading: filesLoading,
+    isFetchingNextPage: loadingMore,
+    hasNextPage: hasMoreFiles,
+    fetchNextPage,
+    error: filesError,
+  } = useInfiniteQuery({
+    queryKey: documentsKeys.files(filesQueryParams),
+    queryFn: ({ pageParam = 0 }) =>
+      fetchFilesPage({ ...filesQueryParams, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.page.hasMore) return undefined;
+      const total = allPages.reduce((sum, p) => sum + p.items.length, 0);
+      return total;
+    },
+  });
+
+  const files = useMemo(
+    () => filesData?.pages.flatMap((p) => p.items) ?? [],
+    [filesData],
+  );
+
+  const stats = useMemo(
+    () =>
+      filesData?.pages.at(-1)?.stats ?? {
+        totalCount: 0,
+        totalSize: 0,
+        weeklyUploaded: 0,
+      },
+    [filesData],
+  );
+
+  const { data: subfolders = [], isLoading: foldersLoading } = useQuery({
+    queryKey: documentsKeys.folders(currentFolderId),
+    queryFn: () => fetchFolders(currentFolderId),
+    enabled: !trashView,
+  });
+
+  const { data: breadcrumb = [] } = useQuery({
+    queryKey: documentsKeys.breadcrumb(currentFolderId),
+    queryFn: () => fetchBreadcrumb(currentFolderId),
+    enabled: !!currentFolderId && !trashView,
+  });
+
+  const loading = filesLoading;
+  const queryError = filesError
+    ? filesError instanceof Error
+      ? filesError.message
+      : "加载失败"
+    : null;
+
+  // -------------------------------------------------------------------------
+  // Invalidation helpers
+  // -------------------------------------------------------------------------
+
+  const invalidateFiles = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["files"] }),
+    [queryClient],
+  );
+
+  const invalidateFolders = useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["folders"] }),
+        queryClient.invalidateQueries({ queryKey: ["breadcrumb"] }),
+      ]),
+    [queryClient],
+  );
+
+  const invalidateAll = useCallback(
+    () => Promise.all([invalidateFiles(), invalidateFolders()]),
+    [invalidateFiles, invalidateFolders],
+  );
+
+  // -------------------------------------------------------------------------
+  // Upload state (kept as-is – not suitable for react-query)
+  // -------------------------------------------------------------------------
+
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
-  const [movingFileId, setMovingFileId] = useState<string | null>(null);
-  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
-  const [purgingFileId, setPurgingFileId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderIdRef = useRef<string | null>(null);
   folderIdRef.current = currentFolderId;
-
-  const [stats, setStats] = useState({
-    totalCount: 0,
-    totalSize: 0,
-    weeklyUploaded: 0,
-  });
-
-  const fetchFolders = useCallback(async (parentId: string | null) => {
-    setFoldersLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (parentId) params.set("parentId", parentId);
-      const response = await fetch(`/api/folders?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`加载文件夹失败：${response.status}`);
-      }
-      const data = (await response.json()) as { items: FolderListItem[] };
-      setSubfolders(data.items);
-    } catch {
-      setSubfolders([]);
-    } finally {
-      setFoldersLoading(false);
-    }
-  }, []);
-
-  const loadBreadcrumb = useCallback(async (folderId: string | null) => {
-    if (!folderId) {
-      setBreadcrumb([]);
-      return;
-    }
-    const response = await fetch(`/api/folders/${folderId}`);
-    if (!response.ok) {
-      setBreadcrumb([]);
-      return;
-    }
-    const data = (await response.json()) as {
-      breadcrumb: Array<{ id: string; name: string }>;
-    };
-    setBreadcrumb(data.breadcrumb);
-  }, []);
-
-  const fetchFilesFromApi = useCallback(
-    async (args: {
-      append: boolean;
-      query: string;
-      folderId: string | null;
-      trash: boolean;
-      sort: DocumentsUrlState["sortBy"];
-      order: DocumentsUrlState["sortOrder"];
-    }) => {
-      const params = new URLSearchParams();
-      if (args.trash) {
-        params.set("trash", "true");
-        if (args.query.trim()) params.set("q", args.query.trim());
-      } else {
-        if (args.query.trim()) params.set("q", args.query.trim());
-        if (args.folderId) params.set("folderId", args.folderId);
-      }
-      params.set("limit", "50");
-      params.set("offset", String(args.append ? filesRef.current.length : 0));
-      params.set("sort", args.sort);
-      params.set("order", args.order);
-
-      const response = await fetch(`/api/files?${params.toString()}`, { method: "GET" });
-      if (!response.ok) {
-        throw new Error(`请求失败：${response.status}`);
-      }
-
-      const data = (await response.json()) as {
-        items: Array<{
-          id: string;
-          name: string;
-          ext: string;
-          mimeType: string;
-          sizeBytes: number;
-          updatedAt: string;
-          createdBy: string | null;
-          folderId: string | null;
-          status: FileItem["status"];
-        }>;
-        stats: {
-          totalCount: number;
-          totalSize: number;
-          weeklyUploaded: number;
-        };
-        page: { hasMore: boolean };
-      };
-
-      const mapped = mapFileItems(data.items);
-      if (args.append) {
-        setFiles((prev) => [...prev, ...mapped]);
-      } else {
-        setFiles(mapped);
-      }
-      setStats(data.stats);
-      setHasMoreFiles(data.page.hasMore);
-    },
-    [],
-  );
-
-  const refreshTrashList = useCallback(async () => {
-    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    setLoading(true);
-    setError(null);
-    try {
-      await fetchFilesFromApi({
-        append: false,
-        query: p.q,
-        folderId: p.folderId,
-        trash: true,
-        sort: p.sortBy,
-        order: p.sortOrder,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-      setFiles([]);
-      setHasMoreFiles(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchFilesFromApi, pathname, searchParams]);
-
-  const refreshCurrentView = useCallback(
-    async (query: string, folderId: string | null) => {
-      const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      setError(null);
-      setLoading(true);
-      try {
-        await Promise.all([
-          fetchFilesFromApi({
-            append: false,
-            query,
-            folderId,
-            trash: false,
-            sort: p.sortBy,
-            order: p.sortOrder,
-          }),
-          fetchFolders(folderId),
-          loadBreadcrumb(folderId),
-        ]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "加载失败");
-        setFiles([]);
-        setHasMoreFiles(false);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [fetchFilesFromApi, fetchFolders, loadBreadcrumb, pathname, searchParams],
-  );
-
-  useEffect(() => {
-    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    if (!p.trashView) return;
-    void refreshTrashList();
-  }, [pathname, searchParams, refreshTrashList]);
-
-  useEffect(() => {
-    const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    if (p.trashView) return;
-    void refreshCurrentView(p.q, p.folderId);
-  }, [pathname, searchParams, refreshCurrentView]);
-
-  const createFolder = useCallback(
-    async (name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
-      const response = await fetch("/api/folders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parentId: currentFolderId,
-          name: trimmed,
-        }),
-      });
-      const body = (await response.json().catch(() => ({}))) as { message?: string };
-      if (!response.ok) {
-        return { ok: false as const, message: body.message || `创建失败：${response.status}` };
-      }
-      await fetchFolders(currentFolderId);
-      return { ok: true as const };
-    },
-    [currentFolderId, fetchFolders],
-  );
-
-  const renameFolder = useCallback(
-    async (folderId: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
-      const res = await fetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) {
-        return { ok: false as const, message: body.message || `重命名失败：${res.status}` };
-      }
-      await fetchFolders(currentFolderId);
-      if (currentFolderId) await loadBreadcrumb(currentFolderId);
-      return { ok: true as const };
-    },
-    [currentFolderId, fetchFolders, loadBreadcrumb],
-  );
-
-  const moveFolder = useCallback(
-    async (folderId: string, newParentId: string | null) => {
-      setError(null);
-      const res = await fetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parentId: newParentId }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) {
-        const msg = body.message || `移动失败：${res.status}`;
-        setError(msg);
-        return { ok: false as const, message: msg };
-      }
-      await fetchFolders(currentFolderId);
-      return { ok: true as const };
-    },
-    [currentFolderId, fetchFolders],
-  );
-
-  const deleteFolder = useCallback(
-    async (folderId: string): Promise<boolean> => {
-      const res = await fetch(`/api/folders/${folderId}`, { method: "DELETE" });
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) {
-        setError(body.message || `删除文件夹失败：${res.status}`);
-        return false;
-      }
-      await fetchFolders(currentFolderId);
-      return true;
-    },
-    [currentFolderId, fetchFolders],
-  );
 
   const updateTask = useCallback((taskId: string, patch: Partial<UploadTask>) => {
     setUploadTasks((prev) =>
@@ -513,11 +455,10 @@ export function useDocumentsPage() {
         setError("上传失败，请重试。");
       }
 
-      const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      await refreshCurrentView(snap.q, snap.folderId);
+      await invalidateAll();
       setUploading(false);
     },
-    [processSingleFile, refreshCurrentView, pathname, searchParams],
+    [processSingleFile, invalidateAll],
   );
 
   const handleSelectFile = useCallback(() => {
@@ -545,115 +486,255 @@ export function useDocumentsPage() {
     [uploadFiles],
   );
 
-  const moveFile = useCallback(
-    async (fileId: string, targetFolderId: string | null) => {
-      setMovingFileId(fileId);
-      setError(null);
+  const retryTask = useCallback(
+    async (task: UploadTask) => {
+      updateTask(task.id, { status: "pending", progress: 0, message: undefined });
+      setUploading(true);
       try {
-        const res = await fetch(`/api/files/${fileId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folderId: targetFolderId }),
-        });
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        if (!res.ok) {
-          setError(body.message || `移动失败：${res.status}`);
-          return;
-        }
-        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-        if (snap.trashView) await refreshTrashList();
-        else await refreshCurrentView(snap.q, snap.folderId);
+        await processSingleFile(task.id, task.file);
+        await invalidateAll();
+      } catch {
+        // error is tracked on task
       } finally {
-        setMovingFileId(null);
+        setUploading(false);
       }
     },
-    [refreshTrashList, refreshCurrentView, pathname, searchParams],
+    [processSingleFile, updateTask, invalidateAll],
   );
 
-  const renameFile = useCallback(
-    async (fileId: string, name: string): Promise<boolean> => {
+  // -------------------------------------------------------------------------
+  // Mutations
+  // -------------------------------------------------------------------------
+
+  const createFolderMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
+      const result = await apiFetch("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: currentFolderId, name: trimmed }),
+      });
+      if (!result.ok) return { ok: false as const, message: result.message };
+      return { ok: true as const };
+    },
+    onSuccess: (result) => {
+      if (result.ok) void invalidateFolders();
+    },
+  });
+
+  const renameFolderMutation = useMutation({
+    mutationFn: async ({ folderId, name }: { folderId: string; name: string }) => {
+      const trimmed = name.trim();
+      if (!trimmed) return { ok: false as const, message: "名称不能为空" };
+      const result = await apiFetch(`/api/folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!result.ok) return { ok: false as const, message: result.message };
+      return { ok: true as const };
+    },
+    onSuccess: (result) => {
+      if (result.ok) void invalidateFolders();
+    },
+  });
+
+  const moveFolderMutation = useMutation({
+    mutationFn: async ({
+      folderId,
+      newParentId,
+    }: {
+      folderId: string;
+      newParentId: string | null;
+    }) => {
+      const result = await apiFetch(`/api/folders/${folderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentId: newParentId }),
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return { ok: false as const, message: result.message };
+      }
+      return { ok: true as const };
+    },
+    onSuccess: (result) => {
+      if (result.ok) void invalidateFolders();
+    },
+  });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: async (folderId: string) => {
+      const result = await apiFetch(`/api/folders/${folderId}`, { method: "DELETE" });
+      if (!result.ok) {
+        setError(result.message);
+        return false;
+      }
+      return true;
+    },
+    onSuccess: (ok) => {
+      if (ok) void invalidateFolders();
+    },
+  });
+
+  const [movingFileId, setMovingFileId] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [purgingFileId, setPurgingFileId] = useState<string | null>(null);
+
+  const moveFileMutation = useMutation({
+    mutationFn: async ({
+      fileId,
+      targetFolderId,
+    }: {
+      fileId: string;
+      targetFolderId: string | null;
+    }) => {
+      setMovingFileId(fileId);
+      setError(null);
+      const result = await apiFetch(`/api/files/${fileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: targetFolderId }),
+      });
+      if (!result.ok) {
+        setError(result.message);
+      }
+      return result.ok;
+    },
+    onSettled: () => {
+      setMovingFileId(null);
+      void invalidateFiles();
+    },
+  });
+
+  const renameFileMutation = useMutation({
+    mutationFn: async ({ fileId, name }: { fileId: string; name: string }) => {
       const trimmed = name.trim();
       if (!trimmed) {
         setError("文件名不能为空");
         return false;
       }
       setError(null);
-      const res = await fetch(`/api/files/${fileId}`, {
+      const result = await apiFetch(`/api/files/${fileId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
       });
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) {
-        setError(body.message || `重命名失败：${res.status}`);
+      if (!result.ok) {
+        setError(result.message);
         return false;
       }
-      const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-      await refreshCurrentView(snap.q, snap.folderId);
       return true;
     },
-    [refreshCurrentView, pathname, searchParams],
-  );
+    onSuccess: (ok) => {
+      if (ok) void invalidateFiles();
+    },
+  });
 
-  const deleteFile = useCallback(
-    async (fileId: string): Promise<boolean> => {
+  const deleteFileMutation = useMutation({
+    mutationFn: async (fileId: string) => {
       setDeletingFileId(fileId);
       setError(null);
-      try {
-        const res = await fetch(`/api/files/${fileId}`, { method: "DELETE" });
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        if (!res.ok) {
-          setError(body.message || `删除失败：${res.status}`);
-          return false;
-        }
-        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-        if (snap.trashView) await refreshTrashList();
-        else await refreshCurrentView(snap.q, snap.folderId);
-        return true;
-      } finally {
-        setDeletingFileId(null);
+      const result = await apiFetch(`/api/files/${fileId}`, { method: "DELETE" });
+      if (!result.ok) {
+        setError(result.message);
+        return false;
       }
+      return true;
     },
-    [refreshTrashList, refreshCurrentView, pathname, searchParams],
-  );
+    onSettled: () => {
+      setDeletingFileId(null);
+      void invalidateFiles();
+    },
+  });
 
-  const restoreFile = useCallback(
-    async (fileId: string): Promise<boolean> => {
+  const restoreFileMutation = useMutation({
+    mutationFn: async (fileId: string) => {
       setError(null);
-      const res = await fetch(`/api/files/${fileId}`, {
+      const result = await apiFetch(`/api/files/${fileId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ restore: true }),
       });
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) {
-        setError(body.message || `恢复失败：${res.status}`);
+      if (!result.ok) {
+        setError(result.message);
         return false;
       }
-      await refreshTrashList();
       return true;
     },
-    [refreshTrashList],
+    onSuccess: (ok) => {
+      if (ok) void invalidateFiles();
+    },
+  });
+
+  const purgeFileMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      setPurgingFileId(fileId);
+      setError(null);
+      const result = await apiFetch(`/api/files/${fileId}/purge`, { method: "POST" });
+      if (!result.ok) {
+        setError(result.message);
+        return false;
+      }
+      return true;
+    },
+    onSettled: () => {
+      setPurgingFileId(null);
+      void invalidateFiles();
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // Wrappers to preserve the existing return API
+  // -------------------------------------------------------------------------
+
+  const createFolder = useCallback(
+    (name: string) => createFolderMutation.mutateAsync(name),
+    [createFolderMutation],
+  );
+
+  const renameFolder = useCallback(
+    (folderId: string, name: string) =>
+      renameFolderMutation.mutateAsync({ folderId, name }),
+    [renameFolderMutation],
+  );
+
+  const moveFolder = useCallback(
+    (folderId: string, newParentId: string | null) =>
+      moveFolderMutation.mutateAsync({ folderId, newParentId }),
+    [moveFolderMutation],
+  );
+
+  const deleteFolder = useCallback(
+    (folderId: string) => deleteFolderMutation.mutateAsync(folderId),
+    [deleteFolderMutation],
+  );
+
+  const moveFile = useCallback(
+    (fileId: string, targetFolderId: string | null) =>
+      moveFileMutation.mutateAsync({ fileId, targetFolderId }).then(() => {}),
+    [moveFileMutation],
+  );
+
+  const renameFile = useCallback(
+    (fileId: string, name: string) => renameFileMutation.mutateAsync({ fileId, name }),
+    [renameFileMutation],
+  );
+
+  const deleteFile = useCallback(
+    (fileId: string) => deleteFileMutation.mutateAsync(fileId),
+    [deleteFileMutation],
+  );
+
+  const restoreFile = useCallback(
+    (fileId: string) => restoreFileMutation.mutateAsync(fileId),
+    [restoreFileMutation],
   );
 
   const purgeFile = useCallback(
-    async (fileId: string): Promise<boolean> => {
-      setPurgingFileId(fileId);
-      setError(null);
-      try {
-        const res = await fetch(`/api/files/${fileId}/purge`, { method: "POST" });
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        if (!res.ok) {
-          setError(body.message || `彻底删除失败：${res.status}`);
-          return false;
-        }
-        await refreshTrashList();
-        return true;
-      } finally {
-        setPurgingFileId(null);
-      }
-    },
-    [refreshTrashList],
+    (fileId: string) => purgeFileMutation.mutateAsync(fileId),
+    [purgeFileMutation],
   );
 
   const fetchDownloadUrl = useCallback(async (fileId: string) => {
@@ -673,43 +754,13 @@ export function useDocumentsPage() {
     setUploadMessage(msg);
   }, []);
 
-  const loadMoreFiles = useCallback(async () => {
-    if (!hasMoreFiles || loadingMore) return;
-    const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    setLoadingMore(true);
-    setError(null);
-    try {
-      await fetchFilesFromApi({
-        append: true,
-        query: snap.q,
-        folderId: snap.folderId,
-        trash: snap.trashView,
-        sort: snap.sortBy,
-        order: snap.sortOrder,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [hasMoreFiles, loadingMore, fetchFilesFromApi, pathname, searchParams]);
+  const loadMoreFiles = useCallback(() => {
+    if (hasMoreFiles && !loadingMore) void fetchNextPage();
+  }, [hasMoreFiles, loadingMore, fetchNextPage]);
 
-  const retryTask = useCallback(
-    async (task: UploadTask) => {
-      updateTask(task.id, { status: "pending", progress: 0, message: undefined });
-      setUploading(true);
-      try {
-        await processSingleFile(task.id, task.file);
-        const snap = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-        await refreshCurrentView(snap.q, snap.folderId);
-      } catch {
-        // error is tracked on task
-      } finally {
-        setUploading(false);
-      }
-    },
-    [refreshCurrentView, processSingleFile, updateTask, pathname, searchParams],
-  );
+  // -------------------------------------------------------------------------
+  // Derived values
+  // -------------------------------------------------------------------------
 
   const statItems = useMemo(
     () => [
@@ -734,12 +785,7 @@ export function useDocumentsPage() {
 
   const trashEntryHref = useMemo(() => {
     const p = parseDocumentsLocation(pathname, new URLSearchParams(searchParams.toString()));
-    return buildDocumentsHref({
-      ...p,
-      trashView: true,
-      folderId: null,
-      q: "",
-    });
+    return buildDocumentsHref({ ...p, trashView: true, folderId: null, q: "" });
   }, [pathname, searchParams]);
 
   const documentsBrowseHref = useMemo(() => {
@@ -747,6 +793,9 @@ export function useDocumentsPage() {
     if (!p.trashView) return buildDocumentsHref(p);
     return buildDocumentsHref({ ...p, trashView: false });
   }, [pathname, searchParams]);
+
+  // Combine query error with mutation/upload error
+  const combinedError = error || queryError;
 
   return {
     viewMode,
@@ -758,7 +807,7 @@ export function useDocumentsPage() {
     setSortBy,
     sortOrder,
     setSortOrder,
-    hasMoreFiles,
+    hasMoreFiles: hasMoreFiles ?? false,
     loadingMore,
     loadMoreFiles,
     currentFolderId,
@@ -775,7 +824,7 @@ export function useDocumentsPage() {
     appliedQuery: parsed.q,
     files,
     loading,
-    error,
+    error: combinedError,
     uploadMessage,
     stats,
     uploading,

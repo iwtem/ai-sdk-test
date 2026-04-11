@@ -1,9 +1,10 @@
 "use client";
 
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import type { statusTextMap } from "../format";
 
@@ -49,12 +50,48 @@ function getDocumentType(ext: string) {
   return "word";
 }
 
+async function fetchFileDetail(fileId: string): Promise<FileDetail> {
+  const res = await fetch(`/api/files/${fileId}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message || `加载失败：${res.status}`);
+  }
+  const data = (await res.json()) as { file: FileDetail };
+  return data.file;
+}
+
+async function fetchDownloadUrl(fileId: string): Promise<string | null> {
+  const res = await fetch(`/api/files/${fileId}/download-url`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message || `获取下载链接失败：${res.status}`);
+  }
+  const data = (await res.json()) as { downloadUrl?: string };
+  return data.downloadUrl || null;
+}
+
 export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }: Props) {
-  const [file, setFile] = useState<FileDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [editorFailed, setEditorFailed] = useState<string | null>(null);
+  const {
+    data: file,
+    isLoading: fileLoading,
+    error: fileError,
+    refetch: refetchFile,
+  } = useQuery({
+    queryKey: ["file-detail", fileId],
+    queryFn: () => fetchFileDetail(fileId),
+  });
+
+  const {
+    data: downloadUrl,
+    isLoading: downloadLoading,
+    refetch: refetchDownload,
+  } = useQuery({
+    queryKey: ["file-download-url", fileId],
+    queryFn: () => fetchDownloadUrl(fileId),
+  });
+
+  const loading = fileLoading || downloadLoading;
+  const error = fileError ? (fileError instanceof Error ? fileError.message : "加载失败") : null;
 
   const ext = useMemo(() => (file?.ext || "").toLowerCase(), [file?.ext]);
   const canPreviewWithOnlyOffice = useMemo(() => OFFICE_EXTENSIONS.has(ext), [ext]);
@@ -63,51 +100,10 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
     [appInternalUrl, fileId],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadFile() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [detailRes, downloadRes] = await Promise.all([
-          fetch(`/api/files/${fileId}`),
-          fetch(`/api/files/${fileId}/download-url`),
-        ]);
-
-        if (!detailRes.ok) {
-          const body = (await detailRes.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message || `加载失败：${detailRes.status}`);
-        }
-        const detailData = (await detailRes.json()) as { file: FileDetail };
-
-        if (!downloadRes.ok) {
-          const body = (await downloadRes.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message || `获取下载链接失败：${downloadRes.status}`);
-        }
-        const downloadData = (await downloadRes.json()) as { downloadUrl?: string };
-
-        if (!cancelled) {
-          setFile(detailData.file);
-          setDownloadUrl(downloadData.downloadUrl || null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载失败");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadFile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fileId]);
+  const handleRefresh = () => {
+    void refetchFile();
+    void refetchDownload();
+  };
 
   return (
     <section className="h-full min-h-0 flex-1 overflow-y-auto">
@@ -124,7 +120,7 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => window.location.reload()}
+              onClick={handleRefresh}
               disabled={loading}
             >
               <RefreshCw className="size-4" />
@@ -159,41 +155,32 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
           <div className="flex-1">
             <div className="h-full overflow-hidden rounded-lg border border-border bg-card">
               {canPreviewWithOnlyOffice ? (
-                editorFailed ? (
-                  <div className="flex h-[560px] items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
-                    {editorFailed}
-                  </div>
-                ) : (
-                  <DocumentEditor
-                    id="onlyoffice-editor"
-                    documentServerUrl={onlyOfficeUrl.replace(/\/$/, "")}
-                    config={{
-                      documentType: getDocumentType(ext),
-                      type: "embedded",
-                      document: {
-                        title: file.name,
-                        url: officeFileUrl,
-                        fileType: ext || "docx",
-                        key: `${file.id}-${new Date(file.updatedAt).getTime()}`,
+                <DocumentEditor
+                  id="onlyoffice-editor"
+                  documentServerUrl={onlyOfficeUrl.replace(/\/$/, "")}
+                  config={{
+                    documentType: getDocumentType(ext),
+                    type: "embedded",
+                    document: {
+                      title: file.name,
+                      url: officeFileUrl,
+                      fileType: ext || "docx",
+                      key: `${file.id}-${new Date(file.updatedAt).getTime()}`,
+                    },
+                    editorConfig: {
+                      mode: "view",
+                      lang: "zh-CN",
+                      customization: {
+                        comments: false,
+                        plugins: false,
+                        hideRulers: true,
+                        hideNotes: true,
                       },
-                      editorConfig: {
-                        mode: "view",
-                        lang: "zh-CN",
-                        customization: {
-                          comments: false,
-                          plugins: false,
-                          hideRulers: true,
-                          hideNotes: true,
-                        },
-                      },
-                    }}
-                    height="100%"
-                    width="100%"
-                    onLoadComponentError={(_errorCode, errorDescription) => {
-                      setEditorFailed(errorDescription || "OnlyOffice 初始化失败。");
-                    }}
-                  />
-                )
+                    },
+                  }}
+                  height="100%"
+                  width="100%"
+                />
               ) : (
                 <div className="flex h-[560px] flex-col items-center justify-center gap-3 rounded-xl border border-border border-dashed bg-background text-center">
                   <FileText className="size-10 text-muted-foreground" />

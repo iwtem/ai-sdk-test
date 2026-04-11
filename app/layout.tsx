@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { PropsWithChildren } from "react";
 import { Header } from "~/components/header";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,10 +27,12 @@ export default function RootLayout({ children }: PropsWithChildren) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
       >
-        <TooltipProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-        </TooltipProvider>
+        <Providers>
+          <TooltipProvider>
+            <Header />
+            <main className="flex-1">{children}</main>
+          </TooltipProvider>
+        </Providers>
       </body>
     </html>
   );
