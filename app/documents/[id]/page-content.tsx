@@ -1,11 +1,11 @@
 "use client";
 
+import { DocumentEditor } from "@onlyoffice/document-editor-react";
 import { AlertCircle, ArrowLeft, Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "~/components/ui/badge";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
-import { formatBytes, formatDateTime, type statusTextMap } from "../format";
+import type { statusTextMap } from "../format";
 
 type FileDetail = {
   id: string;
@@ -26,16 +26,6 @@ type Props = {
   appInternalUrl: string;
 };
 
-type OnlyOfficeDocEditor = {
-  destroyEditor?: () => void;
-};
-
-type OnlyOfficeWindow = Window & {
-  DocsAPI?: {
-    DocEditor: new (holderId: string, config: Record<string, unknown>) => OnlyOfficeDocEditor;
-  };
-};
-
 const OFFICE_EXTENSIONS = new Set([
   "doc",
   "docx",
@@ -49,6 +39,7 @@ const OFFICE_EXTENSIONS = new Set([
   "odt",
   "ods",
   "odp",
+  "pdf",
 ]);
 
 function getDocumentType(ext: string) {
@@ -63,9 +54,7 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [editorReady, setEditorReady] = useState(false);
   const [editorFailed, setEditorFailed] = useState<string | null>(null);
-  const editorRef = useRef<OnlyOfficeDocEditor | null>(null);
 
   const ext = useMemo(() => (file?.ext || "").toLowerCase(), [file?.ext]);
   const canPreviewWithOnlyOffice = useMemo(() => OFFICE_EXTENSIONS.has(ext), [ext]);
@@ -120,66 +109,6 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
     };
   }, [fileId]);
 
-  useEffect(() => {
-    if (!file || !canPreviewWithOnlyOffice || !onlyOfficeUrl) return;
-
-    setEditorReady(false);
-    setEditorFailed(null);
-
-    const script = document.createElement("script");
-    script.src = `${onlyOfficeUrl.replace(/\/$/, "")}/web-apps/apps/api/documents/api.js`;
-    script.async = true;
-
-    script.onload = () => {
-      const win = window as OnlyOfficeWindow;
-      if (!win.DocsAPI?.DocEditor) {
-        setEditorFailed("OnlyOffice 初始化失败：未找到 DocsAPI。");
-        return;
-      }
-      try {
-        editorRef.current?.destroyEditor?.();
-        editorRef.current = new win.DocsAPI.DocEditor("onlyoffice-editor", {
-          width: "100%",
-          height: "100%",
-          documentType: getDocumentType(ext),
-          type: "desktop",
-          document: {
-            title: file.name,
-            url: officeFileUrl,
-            fileType: ext || "docx",
-            key: `${file.id}-${new Date(file.updatedAt).getTime()}`,
-          },
-          editorConfig: {
-            mode: "view",
-            lang: "zh-CN",
-            customization: {
-              comments: false,
-              plugins: false,
-              compactHeader: true,
-              compactToolbar: true,
-              toolbarNoTabs: true,
-              hideRightMenu: true,
-              hideRulers: true,
-              hideNotes: true,
-            },
-          },
-        });
-        setEditorReady(true);
-      } catch (err) {
-        setEditorFailed(err instanceof Error ? err.message : "OnlyOffice 初始化失败。");
-      }
-    };
-
-    script.onerror = () => setEditorFailed("OnlyOffice 脚本加载失败，请检查服务是否可访问。");
-    document.body.appendChild(script);
-
-    return () => {
-      editorRef.current?.destroyEditor?.();
-      editorRef.current = null;
-      script.remove();
-    };
-  }, [file, canPreviewWithOnlyOffice, onlyOfficeUrl, ext, officeFileUrl]);
-
   return (
     <section className="h-full min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex h-full w-full max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
@@ -228,31 +157,49 @@ export function FileDetailPageContent({ fileId, onlyOfficeUrl, appInternalUrl }:
 
         {!loading && !error && file ? (
           <div className="flex-1">
-            <div className="h-full rounded-2xl border border-border bg-card p-3">
+            <div className="h-full overflow-hidden rounded-lg border border-border bg-card">
               {canPreviewWithOnlyOffice ? (
-                <>
-                  <div className="mb-2 flex items-center justify-between">
-                    {!editorReady && !editorFailed ? (
-                      <p className="text-muted-foreground text-xs">初始化预览器中…</p>
-                    ) : null}
+                editorFailed ? (
+                  <div className="flex h-[560px] items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
+                    {editorFailed}
                   </div>
-                  {editorFailed ? (
-                    <div className="flex h-[560px] items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive text-sm">
-                      {editorFailed}
-                    </div>
-                  ) : (
-                    <div
-                      id="onlyoffice-editor"
-                      className="h-[560px] w-full overflow-hidden rounded-xl"
-                    />
-                  )}
-                </>
+                ) : (
+                  <DocumentEditor
+                    id="onlyoffice-editor"
+                    documentServerUrl={onlyOfficeUrl.replace(/\/$/, "")}
+                    config={{
+                      documentType: getDocumentType(ext),
+                      type: "embedded",
+                      document: {
+                        title: file.name,
+                        url: officeFileUrl,
+                        fileType: ext || "docx",
+                        key: `${file.id}-${new Date(file.updatedAt).getTime()}`,
+                      },
+                      editorConfig: {
+                        mode: "view",
+                        lang: "zh-CN",
+                        customization: {
+                          comments: false,
+                          plugins: false,
+                          hideRulers: true,
+                          hideNotes: true,
+                        },
+                      },
+                    }}
+                    height="100%"
+                    width="100%"
+                    onLoadComponentError={(_errorCode, errorDescription) => {
+                      setEditorFailed(errorDescription || "OnlyOffice 初始化失败。");
+                    }}
+                  />
+                )
               ) : (
                 <div className="flex h-[560px] flex-col items-center justify-center gap-3 rounded-xl border border-border border-dashed bg-background text-center">
                   <FileText className="size-10 text-muted-foreground" />
                   <p className="font-medium text-sm">当前文件类型暂不支持 OnlyOffice 预览</p>
                   <p className="text-muted-foreground text-xs">
-                    仅支持 Office 文档（Word / Excel / PowerPoint / ODF / TXT 等）
+                    仅支持 Office 文档（Word / Excel / PowerPoint / PDF / ODF / TXT 等）
                   </p>
                 </div>
               )}
