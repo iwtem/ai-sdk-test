@@ -32,7 +32,9 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <Providers>
           <TooltipProvider>
             <Header />
-            <main className="flex-1">{children}</main>
+            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+              {children}
+            </main>
             <Toaster richColors position="top-center" />
           </TooltipProvider>
         </Providers>
