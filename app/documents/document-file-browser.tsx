@@ -50,7 +50,6 @@ type DocumentFileBrowserProps = {
   onKeywordChange: (value: string) => void;
   filesQuery: UseInfiniteQueryResult;
   files: FileItem[];
-  error: string | null;
   foldersLoading: boolean;
   subfolders: FolderListItem[];
   breadcrumb: Array<{ id: string; name: string }>;
@@ -62,7 +61,6 @@ export function DocumentFileBrowser({
   onKeywordChange,
   filesQuery,
   files,
-  error,
   foldersLoading,
   subfolders,
   breadcrumb,
@@ -72,6 +70,12 @@ export function DocumentFileBrowser({
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+
+  const filesError = filesQuery.error
+    ? filesQuery.error instanceof Error
+      ? filesQuery.error.message
+      : "加载失败"
+    : null;
 
   const sortedSubfolders = useMemo(() => {
     if (url.trashView) return [];
@@ -218,10 +222,10 @@ export function DocumentFileBrowser({
         </div>
       </div>
 
-      {error ? (
+      {filesError ? (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
           <AlertCircle className="size-4" />
-          {error}
+          {filesError}
         </div>
       ) : null}
 
@@ -524,11 +528,7 @@ export function DocumentFileBrowser({
             <Button type="button" variant="outline" onClick={() => setCreateFolderOpen(false)}>
               取消
             </Button>
-            <Button
-              type="button"
-              onClick={handleCreateFolder}
-              disabled={createFolder.isPending}
-            >
+            <Button type="button" onClick={handleCreateFolder} disabled={createFolder.isPending}>
               {createFolder.isPending ? "创建中…" : "创建"}
             </Button>
           </DialogFooter>
