@@ -1,46 +1,39 @@
 "use client";
 
 import { UploadCloud } from "lucide-react";
+import type { ReactNode } from "react";
 import { useDropzone } from "react-dropzone";
-import { Button } from "~/components/ui/button";
 
 type DocumentUploadZoneProps = {
   uploading: boolean;
   onFiles: (files: File[]) => void;
+  children: ReactNode;
 };
 
-export function DocumentUploadZone({ uploading, onFiles }: DocumentUploadZoneProps) {
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+export function DocumentUploadZone({ uploading, onFiles, children }: DocumentUploadZoneProps) {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: onFiles,
-    noClick: false,
+    noClick: true,
+    noKeyboard: true,
     disabled: uploading,
     multiple: true,
   });
 
   return (
-    <div
-      {...getRootProps()}
-      className={`cursor-pointer rounded-2xl border border-dashed p-5 transition-colors sm:p-7 ${
-        isDragActive ? "border-primary bg-primary/5" : "border-border/90 bg-muted/30"
-      }`}
-    >
+    <div {...getRootProps()} className="relative">
       <input {...getInputProps()} />
-      <div className="flex flex-col items-start gap-3">
-        <div className="rounded-xl bg-background p-2 text-muted-foreground">
-          <UploadCloud className="size-5" />
+      {children}
+      {isDragActive && !uploading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-primary border-dashed bg-primary/5 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-2 text-primary">
+            <UploadCloud className="size-10" />
+            <p className="font-medium text-lg">松开鼠标上传文件</p>
+            <p className="text-muted-foreground text-sm">
+              仅支持文档类文件（PDF、Office、纯文本等）
+            </p>
+          </div>
         </div>
-        <div className="space-y-1">
-          <h2 className="font-medium text-base">拖拽文件到这里，或点击选择文件</h2>
-          <p className="text-muted-foreground text-sm">
-            仅支持文档类文件（PDF、Office、纯文本等），可多选；图片、音视频、压缩包等无法上传。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="secondary" onClick={open} disabled={uploading}>
-            {uploading ? "上传中..." : "选择文件"}
-          </Button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

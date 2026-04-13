@@ -1,15 +1,22 @@
-import type { LucideIcon } from "lucide-react";
+import { FileUp, FolderOpen, HardDrive } from "lucide-react";
+import { formatBytes } from "./format";
 
-export type StatItem = {
-  label: string;
-  value: string;
-  icon: LucideIcon;
-};
+interface DocumentStatsProps {
+  totalCount: number;
+  totalSize: number;
+  weeklyUploaded: number;
+}
 
-export function DocumentStats({ items }: { items: StatItem[] }) {
+export function DocumentStats({ totalCount, totalSize, weeklyUploaded }: DocumentStatsProps) {
+  const statItems = [
+    { label: "文件总数", value: totalCount, icon: FolderOpen },
+    { label: "已用空间", value: formatBytes(totalSize), icon: HardDrive },
+    { label: "本周上传", value: weeklyUploaded, icon: FileUp },
+  ];
+
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {items.map((item) => {
+      {statItems.map((item) => {
         const Icon = item.icon;
         return (
           <div key={item.label} className="rounded-2xl border border-border bg-card px-4 py-3">
