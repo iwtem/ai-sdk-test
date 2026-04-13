@@ -78,7 +78,6 @@ export function DocumentFileBrowser({
     : null;
 
   const sortedSubfolders = useMemo(() => {
-    if (url.trashView) return [];
     const list = [...subfolders];
     const mult = url.sortOrder === "asc" ? 1 : -1;
     if (url.sortBy === "name") {
@@ -95,14 +94,13 @@ export function DocumentFileBrowser({
       list.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
     }
     return list;
-  }, [subfolders, url.sortBy, url.sortOrder, url.trashView]);
+  }, [subfolders, url.sortBy, url.sortOrder]);
 
   const visibleSubfolders = useMemo(() => {
-    if (url.trashView) return [];
     const q = url.q.trim().toLowerCase();
     if (!q) return sortedSubfolders;
     return sortedSubfolders.filter((f) => f.name.toLowerCase().includes(q));
-  }, [sortedSubfolders, url.q, url.trashView]);
+  }, [sortedSubfolders, url.q]);
 
   const handleCreateFolder = () => {
     setCreateFolderError(null);
@@ -140,43 +138,39 @@ export function DocumentFileBrowser({
   const loading = filesQuery.isLoading;
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-      {!url.trashView ? (
-        <div className="flex flex-wrap items-center gap-1 border-border border-b pb-3 text-sm">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2 text-muted-foreground"
-            onClick={() => url.updateUrl({ folderId: null, trashView: false })}
-          >
-            根目录
-          </Button>
-          {breadcrumb.map((crumb, index) => (
-            <span key={crumb.id} className="inline-flex items-center gap-1">
-              <ChevronRight className="size-4 text-muted-foreground" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-2 ${index === breadcrumb.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"}`}
-                onClick={() => url.updateUrl({ folderId: crumb.id, trashView: false })}
-              >
-                {crumb.name}
-              </Button>
-            </span>
-          ))}
-        </div>
-      ) : null}
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-1 border-border border-b pb-3 text-sm">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-muted-foreground"
+          onClick={() => url.updateUrl({ folderId: null, trashView: false })}
+        >
+          根目录
+        </Button>
+        {breadcrumb.map((crumb, index) => (
+          <span key={crumb.id} className="inline-flex items-center gap-1">
+            <ChevronRight className="size-4 text-muted-foreground" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={`h-8 px-2 ${index === breadcrumb.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"}`}
+              onClick={() => url.updateUrl({ folderId: crumb.id, trashView: false })}
+            >
+              {crumb.name}
+            </Button>
+          </span>
+        ))}
+      </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder={
-                url.trashView ? "搜索已删除文件名，按 Enter 搜索" : "搜索文件名，按 Enter 搜索"
-              }
+              placeholder="搜索文件名，按 Enter 搜索"
               className="pl-8"
               value={keywordDraft}
               onChange={(e) => onKeywordChange(e.target.value)}
@@ -188,16 +182,14 @@ export function DocumentFileBrowser({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
-          {!url.trashView ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => setCreateFolderOpen(true)}
-            >
-              新建文件夹
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => setCreateFolderOpen(true)}
+          >
+            新建文件夹
+          </Button>
           <ToggleGroup
             type="single"
             value={url.viewMode}
@@ -229,58 +221,49 @@ export function DocumentFileBrowser({
         </div>
       ) : null}
 
-      {!loading &&
-      !foldersLoading &&
-      files.length === 0 &&
-      (url.trashView || visibleSubfolders.length === 0) ? (
+      {!loading && !foldersLoading && files.length === 0 && visibleSubfolders.length === 0 ? (
         <div className="rounded-xl border border-border bg-background px-4 py-12 text-center text-muted-foreground text-sm">
-          {url.trashView
-            ? !url.q.trim()
-              ? "回收站为空。"
-              : "未找到匹配的已删除文件。"
-            : !url.q.trim()
-              ? "当前目录下暂无文件与子文件夹，可上传文档或新建文件夹。"
-              : "没有匹配的文件或子文件夹，可调整关键词或清空搜索。"}
+          {!url.q.trim()
+            ? "当前目录下暂无文件与子文件夹，可上传文档或新建文件夹。"
+            : "没有匹配的文件或子文件夹，可调整关键词或清空搜索。"}
         </div>
       ) : null}
 
       {url.viewMode === "card" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {!url.trashView
-            ? visibleSubfolders.map((folder) => (
-                <article
-                  key={`folder-${folder.id}`}
-                  className="rounded-xl border border-border bg-background p-4 transition-colors hover:bg-muted/40"
+          {visibleSubfolders.map((folder) => (
+            <article
+              key={`folder-${folder.id}`}
+              className="rounded-xl border border-border bg-background p-4 transition-colors hover:bg-muted/40"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 flex-col items-start gap-2 text-left"
+                  onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
                 >
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <button
-                      type="button"
-                      className="flex min-w-0 flex-1 flex-col items-start gap-2 text-left"
-                      onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
-                    >
-                      <div className="inline-flex items-center gap-2 text-muted-foreground">
-                        <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                        <span className="font-medium text-xs">文件夹</span>
-                      </div>
-                      <h3 className="line-clamp-1 font-medium text-foreground">{folder.name}</h3>
-                      <Badge variant="secondary">目录</Badge>
-                      <div className="text-muted-foreground text-xs">
-                        <p className="inline-flex items-center gap-1.5">
-                          <CalendarDays className="size-3.5" />
-                          更新于 {formatDateTime(folder.updatedAt)}
-                        </p>
-                      </div>
-                    </button>
-                    <FolderActionsMenu
-                      folder={folder}
-                      currentFolderId={url.folderId}
-                      breadcrumb={breadcrumb}
-                      subfolders={subfolders}
-                    />
+                  <div className="inline-flex items-center gap-2 text-muted-foreground">
+                    <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span className="font-medium text-xs">文件夹</span>
                   </div>
-                </article>
-              ))
-            : null}
+                  <h3 className="line-clamp-1 font-medium text-foreground">{folder.name}</h3>
+                  <Badge variant="secondary">目录</Badge>
+                  <div className="text-muted-foreground text-xs">
+                    <p className="inline-flex items-center gap-1.5">
+                      <CalendarDays className="size-3.5" />
+                      更新于 {formatDateTime(folder.updatedAt)}
+                    </p>
+                  </div>
+                </button>
+                <FolderActionsMenu
+                  folder={folder}
+                  currentFolderId={url.folderId}
+                  breadcrumb={breadcrumb}
+                  subfolders={subfolders}
+                />
+              </div>
+            </article>
+          ))}
           {files.map((file) => {
             const visualType = normalizeType(file.ext, file.mimeType);
             const extDisplay = (file.ext || "—").toUpperCase();
@@ -299,7 +282,6 @@ export function DocumentFileBrowser({
                   <div className="flex shrink-0 items-center gap-1">
                     <Badge variant="outline">{formatBytes(file.sizeBytes)}</Badge>
                     <FileActionsMenu
-                      trashView={url.trashView}
                       file={file}
                       currentFolderId={url.folderId}
                       breadcrumb={breadcrumb}
@@ -402,43 +384,41 @@ export function DocumentFileBrowser({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!url.trashView
-                ? visibleSubfolders.map((folder) => (
-                    <TableRow
-                      key={`folder-${folder.id}`}
-                      className="text-sm transition-colors hover:bg-muted/40"
+              {visibleSubfolders.map((folder) => (
+                <TableRow
+                  key={`folder-${folder.id}`}
+                  className="text-sm transition-colors hover:bg-muted/40"
+                >
+                  <TableCell>
+                    <button
+                      type="button"
+                      className="flex min-w-0 items-center gap-2.5 text-left"
+                      onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
                     >
-                      <TableCell>
-                        <button
-                          type="button"
-                          className="flex min-w-0 items-center gap-2.5 text-left"
-                          onClick={() => url.updateUrl({ folderId: folder.id, trashView: false })}
-                        >
-                          <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{folder.name}</p>
-                            <p className="truncate text-muted-foreground text-xs">文件夹</p>
-                          </div>
-                        </button>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDateTime(folder.updatedAt)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">—</TableCell>
-                      <TableCell>
-                        <div className="flex justify-center">
-                          <FolderActionsMenu
-                            folder={folder}
-                            currentFolderId={url.folderId}
-                            breadcrumb={breadcrumb}
-                            subfolders={subfolders}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                : null}
+                      <Folder className="size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{folder.name}</p>
+                        <p className="truncate text-muted-foreground text-xs">文件夹</p>
+                      </div>
+                    </button>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">—</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDateTime(folder.updatedAt)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">—</TableCell>
+                  <TableCell>
+                    <div className="flex justify-center">
+                      <FolderActionsMenu
+                        folder={folder}
+                        currentFolderId={url.folderId}
+                        breadcrumb={breadcrumb}
+                        subfolders={subfolders}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
               {files.map((file) => {
                 const visualType = normalizeType(file.ext, file.mimeType);
                 return (
@@ -470,7 +450,6 @@ export function DocumentFileBrowser({
                     <TableCell>
                       <div className="flex justify-center">
                         <FileActionsMenu
-                          trashView={url.trashView}
                           file={file}
                           currentFolderId={url.folderId}
                           breadcrumb={breadcrumb}
