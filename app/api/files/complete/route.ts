@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "~/lib/db";
 import { fileJobs, files } from "~/lib/db/schema/files";
-import { env } from "~/lib/env.mjs";
+import { env } from "~/lib/env";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
   isDocumentUploadAllowed,

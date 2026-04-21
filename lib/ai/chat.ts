@@ -1,6 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
-import { env } from "~/lib/env.mjs";
+import { env } from "~/lib/env";
 
 export function getChatModel(): LanguageModel {
   const baseURL = env.CHAT_BASE_URL;

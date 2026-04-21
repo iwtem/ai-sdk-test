@@ -1,24 +1,25 @@
 "use client";
 
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Search } from "lucide-react";
+import { AlertCircle, ArrowLeft, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Button } from "~/components/ui/button";
+import { DataTable, type DataTableColumn } from "~/components/ui/data-table";
 import { Input } from "~/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { FileActionsMenu } from "../document-file-actions";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "../document-file-type";
 import { DocumentHeader } from "../document-header";
 import type { FileSortField } from "../documents-url";
 import { formatBytes, formatDateTime, statusTextMap } from "../format";
+import type { FileItem } from "../types";
 import { useDocumentsPage } from "../use-documents-page";
+
+const sortLabelMap: Record<FileSortField, string> = {
+  name: "文件名",
+  size: "大小",
+  updatedAt: "更新时间",
+  createdAt: "创建时间",
+};
 
 export default function DocumentsTrashPage() {
   const { url, keywordDraft, setKeywordDraft, filesQuery, files, foldersQuery, breadcrumbQuery } =
@@ -35,24 +36,85 @@ export default function DocumentsTrashPage() {
   const breadcrumb = useMemo(() => breadcrumbQuery.data ?? [], [breadcrumbQuery.data]);
   const subfolders = useMemo(() => foldersQuery.data ?? [], [foldersQuery.data]);
 
-  const handleSortBy = (field: FileSortField) => {
-    if (url.sortBy === field) {
-      url.updateUrl({ sortOrder: url.sortOrder === "asc" ? "desc" : "asc" });
-      return;
-    }
-    url.updateUrl({ sortBy: field, sortOrder: field === "name" ? "asc" : "desc" });
-  };
-
   const handleSearch = () => {
     url.updateUrl({ q: keywordDraft.trim() });
   };
 
-  const sortLabelMap: Record<FileSortField, string> = {
-    name: "文件名",
-    size: "大小",
-    updatedAt: "更新时间",
-    createdAt: "创建时间",
-  };
+  const columns = useMemo<DataTableColumn<FileItem>[]>(
+    () => [
+      {
+        key: "name",
+        title: "文件名",
+        width: "38%",
+        sortable: "name",
+        defaultSortOrder: "asc",
+        render: (file) => {
+          const vt = normalizeType(file.ext, file.mimeType);
+          return (
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="text-muted-foreground">
+                <FileTypeIcon type={vt} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-medium">
+                  <Link href={`/documents/${file.id}`} className="hover:underline">
+                    {file.name}
+                  </Link>
+                </p>
+                <p className="truncate text-muted-foreground text-xs">
+                  {fileVisualTypeLabels[vt]} · {statusTextMap[file.status]}
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: "size",
+        title: "大小",
+        width: "16%",
+        sortable: "size",
+        defaultSortOrder: "desc",
+        render: (file) => (
+          <span className="text-muted-foreground">{formatBytes(file.sizeBytes)}</span>
+        ),
+      },
+      {
+        key: "updatedAt",
+        title: "更新时间",
+        width: "22%",
+        sortable: "updatedAt",
+        defaultSortOrder: "desc",
+        render: (file) => (
+          <span className="text-muted-foreground">{formatDateTime(file.updatedAt)}</span>
+        ),
+      },
+      {
+        key: "owner",
+        title: "上传人",
+        width: "16%",
+        render: (file) => <span className="text-muted-foreground">{file.owner || "未知"}</span>,
+      },
+      {
+        key: "actions",
+        title: "操作",
+        width: "8%",
+        align: "center",
+        render: (file) => (
+          <div className="flex justify-center">
+            <FileActionsMenu
+              trashView={url.trashView}
+              file={file}
+              currentFolderId={url.folderId}
+              breadcrumb={breadcrumb}
+              subfolders={subfolders}
+            />
+          </div>
+        ),
+      },
+    ],
+    [url, breadcrumb, subfolders],
+  );
 
   return (
     <section className="space-y-6">
@@ -96,128 +158,19 @@ export default function DocumentsTrashPage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                <TableHead className="w-[38%]">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleSortBy("name")}
-                    disabled={loading}
-                  >
-                    文件名
-                    {url.sortBy === "name" ? (
-                      url.sortOrder === "asc" ? (
-                        <ArrowUp data-icon="inline-end" />
-                      ) : (
-                        <ArrowDown data-icon="inline-end" />
-                      )
-                    ) : (
-                      <ArrowUpDown data-icon="inline-end" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead className="w-[16%]">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleSortBy("size")}
-                    disabled={loading}
-                  >
-                    大小
-                    {url.sortBy === "size" ? (
-                      url.sortOrder === "asc" ? (
-                        <ArrowUp data-icon="inline-end" />
-                      ) : (
-                        <ArrowDown data-icon="inline-end" />
-                      )
-                    ) : (
-                      <ArrowUpDown data-icon="inline-end" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead className="w-[22%]">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleSortBy("updatedAt")}
-                    disabled={loading}
-                  >
-                    更新时间
-                    {url.sortBy === "updatedAt" ? (
-                      url.sortOrder === "asc" ? (
-                        <ArrowUp data-icon="inline-end" />
-                      ) : (
-                        <ArrowDown data-icon="inline-end" />
-                      )
-                    ) : (
-                      <ArrowUpDown data-icon="inline-end" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead className="w-[16%]">上传人</TableHead>
-                <TableHead className="w-[8%] text-center">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {files.map((file) => {
-                const visualType = normalizeType(file.ext, file.mimeType);
-                return (
-                  <TableRow key={file.id} className="text-sm transition-colors hover:bg-muted/40">
-                    <TableCell>
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="text-muted-foreground">
-                          <FileTypeIcon type={visualType} />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">
-                            <Link href={`/documents/${file.id}`} className="hover:underline">
-                              {file.name}
-                            </Link>
-                          </p>
-                          <p className="truncate text-muted-foreground text-xs">
-                            {fileVisualTypeLabels[visualType]} · {statusTextMap[file.status]}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatBytes(file.sizeBytes)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDateTime(file.updatedAt)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{file.owner || "未知"}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-center">
-                        <FileActionsMenu
-                          trashView={url.trashView}
-                          file={file}
-                          currentFolderId={url.folderId}
-                          breadcrumb={breadcrumb}
-                          subfolders={subfolders}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="border-border border-t px-3 py-2 text-muted-foreground text-xs">
-            当前按 {sortLabelMap[url.sortBy]} {url.sortOrder === "asc" ? "升序" : "降序"} 排序
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          data={files}
+          sortBy={url.sortBy}
+          sortOrder={url.sortOrder}
+          onSortChange={(field, order) =>
+            url.updateUrl({ sortBy: field as FileSortField, sortOrder: order })
+          }
+          loading={loading}
+          footer={`当前按 ${sortLabelMap[url.sortBy]} ${url.sortOrder === "asc" ? "升序" : "降序"} 排序`}
+        />
 
-        {(filesQuery.hasNextPage ?? false) ? (
+        {filesQuery.hasNextPage ? (
           <div className="flex justify-center pt-1">
             <Button
               type="button"

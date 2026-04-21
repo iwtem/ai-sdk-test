@@ -42,4 +42,5 @@ export const env = createEnv({
     /** ONLYOFFICE 容器访问 Next 应用的地址（用于文档流读取） */
     APP_INTERNAL_URL: z.url().default("http://host.docker.internal:3006"),
   },
+  experimental__runtimeEnv: {},
 });

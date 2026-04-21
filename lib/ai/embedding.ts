@@ -2,7 +2,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import type { EmbeddingModel } from "ai";
 import { embedMany } from "ai";
-import { env } from "~/lib/env.mjs";
+import { env } from "~/lib/env";
 
 export function getEmbeddingModel(): EmbeddingModel {
   const baseURL = env.EMBEDDING_BASE_URL || env.CHAT_BASE_URL;

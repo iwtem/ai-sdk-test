@@ -2,7 +2,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "~/lib/db";
 import { files } from "~/lib/db/schema/files";
-import { env } from "~/lib/env.mjs";
+import { env } from "~/lib/env";
 import { getS3Client } from "~/lib/storage/s3";
 
 type RouteContext = { params: Promise<{ id: string }> };

@@ -148,7 +148,10 @@ export function useDocumentsUrlState() {
   );
 
   const documentsBrowseHref = useMemo(
-    () => (parsed.trashView ? buildDocumentsHref({ ...parsed, trashView: false }) : buildDocumentsHref(parsed)),
+    () =>
+      parsed.trashView
+        ? buildDocumentsHref({ ...parsed, trashView: false })
+        : buildDocumentsHref(parsed),
     [parsed],
   );
 
@@ -355,9 +358,7 @@ export function useDocumentsPage() {
       }));
       setUploadTasks((prev) => [...tasks, ...prev].slice(0, 20));
 
-      const results = await Promise.allSettled(
-        tasks.map((t) => processSingleFile(t.id, t.file)),
-      );
+      const results = await Promise.allSettled(tasks.map((t) => processSingleFile(t.id, t.file)));
       const ok = results.filter((r) => r.status === "fulfilled").length;
       const fail = results.length - ok;
 

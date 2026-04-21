@@ -29,3 +29,7 @@ export type UploadTask = {
   status: UploadStatus;
   message?: string;
 };
+
+export type BrowserRow =
+  | { type: "folder"; data: FolderListItem }
+  | { type: "file"; data: FileItem };

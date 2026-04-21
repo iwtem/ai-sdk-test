@@ -1,6 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { env } from "~/lib/env.mjs";
+import { env } from "~/lib/env";
 
 const ensureS3Env = () => {
   if (!env.S3_ENDPOINT) throw new Error("S3_ENDPOINT is not configured");
