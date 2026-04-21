@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   CalendarDays,
-  ChevronRight,
   Folder,
   Grid2x2,
   List,
@@ -241,8 +240,8 @@ export default function DocumentsPage() {
   );
 
   return (
-    <DocumentUploadZone uploading={uploading} onFiles={uploadFiles}>
-      <section className="space-y-6">
+    <DocumentUploadZone uploading={uploading} onFilesAction={uploadFiles}>
+      <section className="space-y-4">
         <DocumentHeader
           title="文档中心"
           description="上传、管理并快速定位团队文档（数据来自接口）。"
@@ -271,30 +270,34 @@ export default function DocumentsPage() {
         <DocumentUploadTasks tasks={uploadTasks} uploading={uploading} onRetry={retryTask} />
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-1 border-border border-b pb-3 text-sm">
+          <div className="flex items-center justify-between gap-3 border-border border-b pb-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {[{ id: "", name: "根目录" }].concat(breadcrumb).map((crumb, index, array) => (
+                <span key={crumb.id} className="inline-flex items-center gap-2">
+                  {index > 0 && <span className="text-muted-foreground text-xs">/</span>}
+                  {index === array.length - 1 ? (
+                    <span className="text-foreground">{crumb.name}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="cursor-pointer text-muted-foreground hover:text-primary"
+                      onClick={() => url.updateUrl({ folderId: crumb.id, trashView: false })}
+                    >
+                      {crumb.name}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+
             <Button
               type="button"
-              variant="ghost"
               size="sm"
-              className="h-8 px-2 text-muted-foreground"
-              onClick={() => url.updateUrl({ folderId: null, trashView: false })}
+              variant="secondary"
+              onClick={() => setCreateFolderOpen(true)}
             >
-              根目录
+              新建文件夹
             </Button>
-            {breadcrumb.map((crumb, index) => (
-              <span key={crumb.id} className="inline-flex items-center gap-1">
-                <ChevronRight className="size-4 text-muted-foreground" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={`h-8 px-2 ${index === breadcrumb.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"}`}
-                  onClick={() => url.updateUrl({ folderId: crumb.id, trashView: false })}
-                >
-                  {crumb.name}
-                </Button>
-              </span>
-            ))}
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -314,14 +317,6 @@ export default function DocumentsPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setCreateFolderOpen(true)}
-              >
-                新建文件夹
-              </Button>
               <ToggleGroup
                 type="single"
                 value={url.viewMode}
@@ -331,15 +326,14 @@ export default function DocumentsPage() {
                 variant="outline"
                 size="sm"
                 spacing={0}
-                className="shrink-0 rounded-lg border border-border"
                 aria-label="视图布局"
               >
                 <ToggleGroupItem value="card" aria-label="卡片视图">
-                  <Grid2x2 className="size-4" />
+                  <Grid2x2 />
                   卡片
                 </ToggleGroupItem>
                 <ToggleGroupItem value="list" aria-label="列表视图">
-                  <List className="size-4" />
+                  <List />
                   列表
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -348,7 +342,7 @@ export default function DocumentsPage() {
 
           {filesError ? (
             <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-              <AlertCircle className="size-4" />
+              <AlertCircle />
               {filesError}
             </div>
           ) : null}
@@ -448,7 +442,6 @@ export default function DocumentsPage() {
             <DataTable
               columns={listColumns}
               data={rows}
-              rowKey={(row) => (row.type === "folder" ? `folder-${row.data.id}` : row.data.id)}
               sortBy={url.sortBy}
               sortOrder={url.sortOrder}
               onSortChange={(field, order) =>

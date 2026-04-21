@@ -132,10 +132,10 @@ export default function DocumentsTrashPage() {
       />
 
       <div className="flex flex-col gap-3">
-        <div className="relative w-full sm:max-w-xs">
+        <div className="relative w-52">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="搜索已删除文件名，按 Enter 搜索"
+            placeholder="搜索已删除文件名"
             className="pl-8"
             value={keywordDraft}
             onChange={(e) => setKeywordDraft(e.target.value)}
@@ -149,12 +149,6 @@ export default function DocumentsTrashPage() {
           <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
             <AlertCircle className="size-4" />
             {filesError}
-          </div>
-        ) : null}
-
-        {!loading && files.length === 0 ? (
-          <div className="rounded-xl border border-border bg-background px-4 py-12 text-center text-muted-foreground text-sm">
-            回收站为空。
           </div>
         ) : null}
 

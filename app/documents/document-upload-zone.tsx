@@ -1,22 +1,23 @@
 "use client";
 
 import { UploadCloud } from "lucide-react";
-import type { ReactNode } from "react";
+import type { PropsWithChildren } from "react";
 import { useDropzone } from "react-dropzone";
 
-type DocumentUploadZoneProps = {
+interface DocumentUploadZoneProps {
   uploading: boolean;
-  onFiles: (files: File[]) => void;
-  children: ReactNode;
-};
+  onFilesAction: (files: File[]) => void;
+}
 
-export function DocumentUploadZone({ uploading, onFiles, children }: DocumentUploadZoneProps) {
+export function DocumentUploadZone(props: PropsWithChildren<DocumentUploadZoneProps>) {
+  const { uploading, onFilesAction, children } = props;
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: onFiles,
+    multiple: true,
     noClick: true,
     noKeyboard: true,
     disabled: uploading,
-    multiple: true,
+    onDrop: onFilesAction,
   });
 
   return (

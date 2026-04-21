@@ -8,51 +8,51 @@ import { Button } from "./button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 
 // ---------------------------------------------------------------------------
-// Public types
+// 对外类型
 // ---------------------------------------------------------------------------
 
 export type SortOrder = "asc" | "desc";
 
 export type DataTableColumn<TData> = {
-  /** Unique key, also used as accessorKey. */
+  /** 唯一键，同时用作 accessorKey。 */
   key: string;
-  /** Header label. */
+  /** 表头文案。 */
   title: ReactNode;
-  /** CSS width, e.g. "38%" or "120px". */
+  /** CSS 宽度，例如 "38%" 或 "120px"。 */
   width?: string;
-  /** If set, the column is sortable. Value is the sort field name emitted via onSortChange. */
+  /** 若设置则该列可排序，值为通过 onSortChange 抛出的排序字段名。 */
   sortable?: string;
-  /** Default sort direction when first clicking this column. Defaults to "asc". */
+  /** 首次点击该列时的默认排序方向，默认为 "asc"。 */
   defaultSortOrder?: SortOrder;
-  /** Custom cell renderer. Receives the full row data. */
+  /** 自定义单元格渲染函数，接收完整行数据。 */
   render?: (record: TData, index: number) => ReactNode;
-  /** Text alignment. */
+  /** 文本对齐方式。 */
   align?: "left" | "center" | "right";
-  /** Extra className on th/td. */
+  /** th/td 额外 className。 */
   className?: string;
 };
 
 export type DataTableProps<TData> = {
   columns: DataTableColumn<TData>[];
   data: TData[];
-  /** Derive a unique key per row. Defaults to (row as any).id */
-  rowKey?: (record: TData, index: number) => string;
-  /** Current sort field (controlled). */
+  /** 空状态文案。 */
+  emptyState?: ReactNode;
+  /** 当前排序字段（受控）。 */
   sortBy?: string;
-  /** Current sort direction (controlled). */
+  /** 当前排序方向（受控）。 */
   sortOrder?: SortOrder;
-  /** Called when user clicks a sortable header. */
+  /** 用户点击可排序表头时触发。 */
   onSortChange?: (field: string, order: SortOrder) => void;
-  /** Disables sort buttons. */
+  /** 是否禁用排序按钮。 */
   loading?: boolean;
-  /** Footer content rendered below the table body. */
+  /** 渲染在表格主体下方的页脚内容。 */
   footer?: ReactNode;
-  /** Extra className on the outer wrapper. */
+  /** 外层容器额外 className。 */
   className?: string;
 };
 
 // ---------------------------------------------------------------------------
-// Column meta (carried through TanStack for rendering)
+// 列元信息（通过 TanStack 传递给渲染层）
 // ---------------------------------------------------------------------------
 
 type ColumnMeta = {
@@ -64,13 +64,13 @@ type ColumnMeta = {
 };
 
 // ---------------------------------------------------------------------------
-// Component
+// 组件
 // ---------------------------------------------------------------------------
 
 export function DataTable<TData>({
   columns: userColumns,
   data,
-  rowKey,
+  emptyState,
   sortBy,
   sortOrder,
   onSortChange,
@@ -80,28 +80,31 @@ export function DataTable<TData>({
 }: DataTableProps<TData>) {
   const columns = useMemo<ColumnDef<TData>[]>(
     () =>
-      userColumns.map((col) => ({
-        id: col.key,
-        accessorFn: () => null,
-        header: () => col.title,
-        cell: col.render
-          ? ({ row }) => col.render!(row.original, row.index)
-          : ({ row }) => {
-              const value = (row.original as Record<string, unknown>)[col.key];
-              return value == null ? "" : String(value);
-            },
-        meta: {
-          width: col.width,
-          align: col.align,
-          className: col.className,
-          sortable: col.sortable,
-          defaultSortOrder: col.defaultSortOrder,
-        } satisfies ColumnMeta,
-      })),
+      userColumns.map((col) => {
+        const renderCell = col.render;
+        return {
+          id: col.key,
+          accessorFn: () => null,
+          header: () => col.title,
+          cell: renderCell
+            ? ({ row }) => renderCell(row.original, row.index)
+            : ({ row }) => {
+                const value = (row.original as Record<string, unknown>)[col.key];
+                return value == null ? "" : String(value);
+              },
+          meta: {
+            width: col.width,
+            align: col.align,
+            className: col.className,
+            sortable: col.sortable,
+            defaultSortOrder: col.defaultSortOrder,
+          } satisfies ColumnMeta,
+        };
+      }),
     [userColumns],
   );
 
-  const table = useReactTable({
+  const { getHeaderGroups, getRowModel } = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
@@ -116,11 +119,13 @@ export function DataTable<TData>({
     }
   };
 
+  const rows = getRowModel().rows;
+
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border", className)}>
       <Table>
         <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
+          {getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="bg-muted/60 hover:bg-muted/60">
               {headerGroup.headers.map((header) => {
                 const meta = header.column.columnDef.meta as ColumnMeta | undefined;
@@ -164,33 +169,39 @@ export function DataTable<TData>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => {
-            const key = rowKey
-              ? rowKey(row.original, row.index)
-              : (row.original as Record<string, unknown>).id != null
-                ? String((row.original as Record<string, unknown>).id)
-                : row.id;
-            return (
-              <TableRow key={key} className="text-sm transition-colors hover:bg-muted/40">
-                {row.getVisibleCells().map((cell) => {
-                  const meta = cell.column.columnDef.meta as ColumnMeta | undefined;
-                  return (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(
-                        meta?.align === "center" && "text-center",
-                        meta?.align === "right" && "text-right",
-                        meta?.className,
-                      )}
-                      style={meta?.width ? { width: meta.width } : undefined}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            );
-          })}
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={Math.max(userColumns.length, 1)}
+                className="py-10 text-center text-muted-foreground"
+              >
+                {emptyState ?? "暂无数据"}
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((row) => {
+              return (
+                <TableRow key={row.id} className="text-sm transition-colors hover:bg-muted/40">
+                  {row.getVisibleCells().map((cell) => {
+                    const meta = cell.column.columnDef.meta as ColumnMeta | undefined;
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          meta?.align === "center" && "text-center",
+                          meta?.align === "right" && "text-right",
+                          meta?.className,
+                        )}
+                        style={meta?.width ? { width: meta.width } : undefined}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              );
+            })
+          )}
         </TableBody>
       </Table>
       {footer != null && (

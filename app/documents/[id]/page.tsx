@@ -1,3 +1,5 @@
+"use client";
+
 import { DocumentEditor } from "@onlyoffice/document-editor-react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, Download, FileText, Loader2, RefreshCw } from "lucide-react";
