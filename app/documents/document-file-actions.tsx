@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Copy,
-  Download,
-  Eye,
-  MoreVertical,
-  Pencil,
-} from "lucide-react";
+import { Copy, Download, Eye, MoreVertical, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -34,96 +28,32 @@ import type { FileItem, FolderListItem } from "./types";
 import { useFileMutations } from "./use-document-mutations";
 
 export function FileActionsMenu({
-  trashView,
   file,
   currentFolderId,
   breadcrumb,
   subfolders,
 }: {
-  trashView: boolean;
   file: FileItem;
   currentFolderId: string | null;
   breadcrumb: Array<{ id: string; name: string }>;
   subfolders: FolderListItem[];
 }) {
-  const { moveFile, renameFile, deleteFile, restoreFile, purgeFile, fetchDownloadUrl } =
-    useFileMutations();
+  const { moveFile, renameFile, deleteFile, fetchDownloadUrl } = useFileMutations();
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(file.name);
 
   const parentFolderId =
     breadcrumb.length >= 2 ? (breadcrumb[breadcrumb.length - 2]?.id ?? null) : null;
   const inSubfolder = (file.folderId ?? null) !== null;
-  const hasMoveTargets =
-    !trashView && (inSubfolder || currentFolderId !== null || subfolders.length > 0);
+  const hasMoveTargets = inSubfolder || currentFolderId !== null || subfolders.length > 0;
   const showMoveSep = (inSubfolder || currentFolderId !== null) && subfolders.length > 0;
 
   const busy =
     (moveFile.isPending && moveFile.variables?.fileId === file.id) ||
     (deleteFile.isPending && deleteFile.variables === file.id) ||
-    (purgeFile.isPending && purgeFile.variables === file.id) ||
     renameFile.isPending;
-
-  if (trashView) {
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 text-muted-foreground"
-              disabled={busy}
-              aria-label="回收站操作"
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => restoreFile.mutate(file.id)}>
-              恢复
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => setConfirmPurgeOpen(true)}>
-              彻底删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Dialog open={confirmPurgeOpen} onOpenChange={setConfirmPurgeOpen}>
-          <DialogContent showCloseButton>
-            <DialogHeader>
-              <DialogTitle>彻底删除</DialogTitle>
-              <DialogDescription>
-                「{file.name}」将从数据库与对象存储中永久删除，无法恢复。
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setConfirmPurgeOpen(false)}>
-                取消
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={purgeFile.isPending}
-                onClick={() =>
-                  purgeFile.mutate(file.id, {
-                    onSuccess: () => setConfirmPurgeOpen(false),
-                  })
-                }
-              >
-                {purgeFile.isPending ? "删除中…" : "彻底删除"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
 
   return (
     <>
@@ -203,9 +133,7 @@ export function FileActionsMenu({
                 {subfolders.map((folder) => (
                   <DropdownMenuItem
                     key={folder.id}
-                    onClick={() =>
-                      moveFile.mutate({ fileId: file.id, targetFolderId: folder.id })
-                    }
+                    onClick={() => moveFile.mutate({ fileId: file.id, targetFolderId: folder.id })}
                   >
                     <span className="truncate">{folder.name}</span>
                   </DropdownMenuItem>

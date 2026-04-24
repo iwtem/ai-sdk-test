@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import type { PropsWithChildren } from "react";
 
 import { Header } from "~/components/header";
@@ -29,15 +30,17 @@ export default function RootLayout({ children }: PropsWithChildren) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} flex h-full flex-col antialiased`}
       >
-        <Providers>
-          <TooltipProvider>
-            <Header />
-            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-              {children}
-            </main>
-            <Toaster richColors position="top-center" />
-          </TooltipProvider>
-        </Providers>
+        <NuqsAdapter>
+          <Providers>
+            <TooltipProvider>
+              <Header />
+              <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+                {children}
+              </main>
+              <Toaster richColors position="top-center" />
+            </TooltipProvider>
+          </Providers>
+        </NuqsAdapter>
       </body>
     </html>
   );

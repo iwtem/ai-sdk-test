@@ -34,7 +34,6 @@ import { DocumentHeader } from "./document-header";
 import { DocumentStats } from "./document-stats";
 import { DocumentUploadTasks } from "./document-upload-tasks";
 import { DocumentUploadZone } from "./document-upload-zone";
-import type { FileSortField } from "./documents-url";
 import { formatBytes, formatDateTime, statusTextMap } from "./format";
 import type { BrowserRow } from "./types";
 import { useFolderMutations } from "./use-document-mutations";
@@ -73,30 +72,11 @@ export default function DocumentsPage() {
   const breadcrumb = breadcrumbQuery.data ?? [];
   const foldersLoading = foldersQuery.isLoading;
 
-  const sortedSubfolders = useMemo(() => {
-    const list = [...subfolders];
-    const mult = url.sortOrder === "asc" ? 1 : -1;
-    if (url.sortBy === "name") {
-      list.sort((a, b) => mult * a.name.localeCompare(b.name, "zh-CN"));
-    } else if (url.sortBy === "updatedAt") {
-      list.sort(
-        (a, b) => mult * (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()),
-      );
-    } else if (url.sortBy === "createdAt") {
-      list.sort(
-        (a, b) => mult * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
-      );
-    } else {
-      list.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
-    }
-    return list;
-  }, [subfolders, url.sortBy, url.sortOrder]);
-
   const visibleSubfolders = useMemo(() => {
     const q = url.q.trim().toLowerCase();
-    if (!q) return sortedSubfolders;
-    return sortedSubfolders.filter((f) => f.name.toLowerCase().includes(q));
-  }, [sortedSubfolders, url.q]);
+    if (!q) return subfolders;
+    return subfolders.filter((f) => f.name.toLowerCase().includes(q));
+  }, [subfolders, url.q]);
 
   const handleCreateFolder = () => {
     setCreateFolderError(null);
@@ -116,13 +96,6 @@ export default function DocumentsPage() {
     url.updateUrl({ q: keywordDraft.trim() });
   };
 
-  const sortLabelMap: Record<FileSortField, string> = {
-    name: "文件名",
-    size: "大小",
-    updatedAt: "更新时间",
-    createdAt: "创建时间",
-  };
-
   const loading = filesQuery.isLoading;
 
   const rows = useMemo<BrowserRow[]>(
@@ -139,8 +112,6 @@ export default function DocumentsPage() {
         key: "name",
         title: "文件名",
         width: "38%",
-        sortable: "name",
-        defaultSortOrder: "asc",
         render: (row) => {
           if (row.type === "folder") {
             return (
@@ -181,8 +152,6 @@ export default function DocumentsPage() {
         key: "size",
         title: "大小",
         width: "16%",
-        sortable: "size",
-        defaultSortOrder: "desc",
         render: (row) => (
           <span className="text-muted-foreground">
             {row.type === "folder" ? "—" : formatBytes(row.data.sizeBytes)}
@@ -193,8 +162,6 @@ export default function DocumentsPage() {
         key: "updatedAt",
         title: "更新时间",
         width: "22%",
-        sortable: "updatedAt",
-        defaultSortOrder: "desc",
         render: (row) => (
           <span className="text-muted-foreground">{formatDateTime(row.data.updatedAt)}</span>
         ),
@@ -225,7 +192,6 @@ export default function DocumentsPage() {
               />
             ) : (
               <FileActionsMenu
-                trashView={url.trashView}
                 file={row.data}
                 currentFolderId={url.folderId}
                 breadcrumb={breadcrumb}
@@ -408,7 +374,6 @@ export default function DocumentsPage() {
                       <div className="flex shrink-0 items-center gap-1">
                         <Badge variant="outline">{formatBytes(file.sizeBytes)}</Badge>
                         <FileActionsMenu
-                          trashView={url.trashView}
                           file={file}
                           currentFolderId={url.folderId}
                           breadcrumb={breadcrumb}
@@ -439,17 +404,7 @@ export default function DocumentsPage() {
               })}
             </div>
           ) : (
-            <DataTable
-              columns={listColumns}
-              data={rows}
-              sortBy={url.sortBy}
-              sortOrder={url.sortOrder}
-              onSortChange={(field, order) =>
-                url.updateUrl({ sortBy: field as FileSortField, sortOrder: order })
-              }
-              loading={loading}
-              footer={`当前按 ${sortLabelMap[url.sortBy]} ${url.sortOrder === "asc" ? "升序" : "降序"} 排序`}
-            />
+            <DataTable columns={listColumns} data={rows} loading={loading} />
           )}
 
           {(filesQuery.hasNextPage ?? false) ? (

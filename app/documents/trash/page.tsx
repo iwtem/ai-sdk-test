@@ -1,29 +1,158 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, Search } from "lucide-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { AlertCircle, ArrowLeft, MoreVertical, Search } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useQueryState } from "nuqs";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { DataTable, type DataTableColumn } from "~/components/ui/data-table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { FileActionsMenu } from "../document-file-actions";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "../document-file-type";
 import { DocumentHeader } from "../document-header";
-import type { FileSortField } from "../documents-url";
 import { formatBytes, formatDateTime, statusTextMap } from "../format";
 import type { FileItem } from "../types";
-import { useDocumentsPage } from "../use-documents-page";
+import { useFileMutations } from "../use-document-mutations";
 
-const sortLabelMap: Record<FileSortField, string> = {
-  name: "文件名",
-  size: "大小",
-  updatedAt: "更新时间",
-  createdAt: "创建时间",
-};
+function mapFileItems(
+  items: Array<{
+    id: string;
+    name: string;
+    ext: string;
+    mimeType: string;
+    sizeBytes: number;
+    updatedAt: string;
+    createdBy: string | null;
+    folderId: string | null;
+    status: FileItem["status"];
+  }>,
+): FileItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    ext: item.ext || "",
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+    updatedAt: item.updatedAt,
+    owner: item.createdBy,
+    status: item.status,
+    folderId: item.folderId ?? null,
+  }));
+}
+
+async function fetchTrashFilesPage(params: { q: string; offset: number }) {
+  const sp = new URLSearchParams();
+  sp.set("trash", "true");
+  if (params.q.trim()) sp.set("q", params.q.trim());
+  sp.set("limit", "50");
+  sp.set("offset", String(params.offset));
+
+  const res = await fetch(`/api/files?${sp.toString()}`);
+  if (!res.ok) throw new Error(`请求失败：${res.status}`);
+
+  const data = (await res.json()) as {
+    items: Parameters<typeof mapFileItems>[0];
+    page: { hasMore: boolean };
+  };
+
+  return { items: mapFileItems(data.items), page: data.page };
+}
+
+function TrashFileActionsMenu({ file }: { file: FileItem }) {
+  const { restoreFile, purgeFile } = useFileMutations();
+  const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
+
+  const busy =
+    (restoreFile.isPending && restoreFile.variables === file.id) ||
+    (purgeFile.isPending && purgeFile.variables === file.id);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            disabled={busy}
+            aria-label="回收站操作"
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem onClick={() => restoreFile.mutate(file.id)}>恢复</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => setConfirmPurgeOpen(true)}>
+            彻底删除
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={confirmPurgeOpen} onOpenChange={setConfirmPurgeOpen}>
+        <DialogContent showCloseButton>
+          <DialogHeader>
+            <DialogTitle>彻底删除</DialogTitle>
+            <DialogDescription>
+              「{file.name}」将从数据库与对象存储中永久删除，无法恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmPurgeOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={purgeFile.isPending}
+              onClick={() =>
+                purgeFile.mutate(file.id, {
+                  onSuccess: () => setConfirmPurgeOpen(false),
+                })
+              }
+            >
+              {purgeFile.isPending ? "删除中…" : "彻底删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 export default function DocumentsTrashPage() {
-  const { url, keywordDraft, setKeywordDraft, filesQuery, files, foldersQuery, breadcrumbQuery } =
-    useDocumentsPage();
+  const [query, setQuery] = useQueryState("q", { defaultValue: "" });
+
+  const filesQuery = useInfiniteQuery({
+    queryKey: ["files", { q: query, trash: true }],
+    queryFn: ({ pageParam = 0 }) => fetchTrashFilesPage({ q: query, offset: pageParam as number }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.page.hasMore) return undefined;
+      return allPages.reduce((sum, p) => sum + p.items.length, 0);
+    },
+  });
+
+  const files = useMemo(
+    () => filesQuery.data?.pages.flatMap((p) => p.items) ?? [],
+    [filesQuery.data],
+  );
 
   const filesError = filesQuery.error
     ? filesQuery.error instanceof Error
@@ -33,21 +162,12 @@ export default function DocumentsTrashPage() {
 
   const loading = filesQuery.isLoading;
 
-  const breadcrumb = useMemo(() => breadcrumbQuery.data ?? [], [breadcrumbQuery.data]);
-  const subfolders = useMemo(() => foldersQuery.data ?? [], [foldersQuery.data]);
-
-  const handleSearch = () => {
-    url.updateUrl({ q: keywordDraft.trim() });
-  };
-
   const columns = useMemo<DataTableColumn<FileItem>[]>(
     () => [
       {
         key: "name",
         title: "文件名",
         width: "38%",
-        sortable: "name",
-        defaultSortOrder: "asc",
         render: (file) => {
           const vt = normalizeType(file.ext, file.mimeType);
           return (
@@ -73,8 +193,6 @@ export default function DocumentsTrashPage() {
         key: "size",
         title: "大小",
         width: "16%",
-        sortable: "size",
-        defaultSortOrder: "desc",
         render: (file) => (
           <span className="text-muted-foreground">{formatBytes(file.sizeBytes)}</span>
         ),
@@ -83,8 +201,6 @@ export default function DocumentsTrashPage() {
         key: "updatedAt",
         title: "更新时间",
         width: "22%",
-        sortable: "updatedAt",
-        defaultSortOrder: "desc",
         render: (file) => (
           <span className="text-muted-foreground">{formatDateTime(file.updatedAt)}</span>
         ),
@@ -102,18 +218,12 @@ export default function DocumentsTrashPage() {
         align: "center",
         render: (file) => (
           <div className="flex justify-center">
-            <FileActionsMenu
-              trashView={url.trashView}
-              file={file}
-              currentFolderId={url.folderId}
-              breadcrumb={breadcrumb}
-              subfolders={subfolders}
-            />
+            <TrashFileActionsMenu file={file} />
           </div>
         ),
       },
     ],
-    [url, breadcrumb, subfolders],
+    [],
   );
 
   return (
@@ -132,16 +242,13 @@ export default function DocumentsTrashPage() {
       />
 
       <div className="flex flex-col gap-3">
-        <div className="relative w-52">
+        <div className="relative w-48">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="搜索已删除文件名"
             className="pl-8"
-            value={keywordDraft}
-            onChange={(e) => setKeywordDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
-            }}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
@@ -152,17 +259,7 @@ export default function DocumentsTrashPage() {
           </div>
         ) : null}
 
-        <DataTable
-          columns={columns}
-          data={files}
-          sortBy={url.sortBy}
-          sortOrder={url.sortOrder}
-          onSortChange={(field, order) =>
-            url.updateUrl({ sortBy: field as FileSortField, sortOrder: order })
-          }
-          loading={loading}
-          footer={`当前按 ${sortLabelMap[url.sortBy]} ${url.sortOrder === "asc" ? "升序" : "降序"} 排序`}
-        />
+        <DataTable columns={columns} data={files} loading={loading} />
 
         {filesQuery.hasNextPage ? (
           <div className="flex justify-center pt-1">

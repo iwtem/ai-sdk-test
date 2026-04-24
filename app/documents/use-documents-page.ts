@@ -15,20 +15,12 @@ import {
 } from "./documents-url";
 import type { FileItem, FolderListItem, UploadTask } from "./types";
 
-export type { FileSortField, FileSortOrder } from "./documents-url";
-
 // ---------------------------------------------------------------------------
 // Query key factory
 // ---------------------------------------------------------------------------
 
 export const documentsKeys = {
-  files: (params: {
-    q: string;
-    folderId: string | null;
-    trash: boolean;
-    sort: string;
-    order: string;
-  }) => ["files", params] as const,
+  files: (params: { q: string; folderId: string | null }) => ["files", params] as const,
   folders: (parentId: string | null) => ["folders", parentId] as const,
   breadcrumb: (folderId: string | null) => ["breadcrumb", folderId] as const,
 };
@@ -72,23 +64,13 @@ type FilesPage = {
 async function fetchFilesPage(params: {
   q: string;
   folderId: string | null;
-  trash: boolean;
-  sort: string;
-  order: string;
   offset: number;
 }): Promise<FilesPage> {
   const sp = new URLSearchParams();
-  if (params.trash) {
-    sp.set("trash", "true");
-    if (params.q.trim()) sp.set("q", params.q.trim());
-  } else {
-    if (params.q.trim()) sp.set("q", params.q.trim());
-    if (params.folderId) sp.set("folderId", params.folderId);
-  }
+  if (params.q.trim()) sp.set("q", params.q.trim());
+  if (params.folderId) sp.set("folderId", params.folderId);
   sp.set("limit", "50");
   sp.set("offset", String(params.offset));
-  sp.set("sort", params.sort);
-  sp.set("order", params.order);
 
   const res = await fetch(`/api/files?${sp.toString()}`);
   if (!res.ok) throw new Error(`请求失败：${res.status}`);
@@ -179,11 +161,8 @@ export function useDocumentsPage() {
     () => ({
       q: url.q,
       folderId: url.folderId,
-      trash: url.trashView,
-      sort: url.sortBy,
-      order: url.sortOrder,
     }),
-    [url.q, url.folderId, url.trashView, url.sortBy, url.sortOrder],
+    [url.q, url.folderId],
   );
 
   const filesQuery = useInfiniteQuery({
@@ -215,13 +194,12 @@ export function useDocumentsPage() {
   const foldersQuery = useQuery({
     queryKey: documentsKeys.folders(url.folderId),
     queryFn: () => fetchFolders(url.folderId),
-    enabled: !url.trashView,
   });
 
   const breadcrumbQuery = useQuery({
     queryKey: documentsKeys.breadcrumb(url.folderId),
     queryFn: () => fetchBreadcrumb(url.folderId),
-    enabled: !!url.folderId && !url.trashView,
+    enabled: !!url.folderId,
   });
 
   // -------------------------------------------------------------------------
