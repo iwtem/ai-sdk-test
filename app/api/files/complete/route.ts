@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { db } from "~/lib/db";
-import { fileJobs, files } from "~/lib/db/schema/files";
 import { env } from "~/lib/env";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
@@ -42,10 +41,9 @@ export async function POST(request: Request) {
       return Response.json({ message: "S3_BUCKET is not configured" }, { status: 500 });
     }
 
-    const created = await db.transaction(async (tx) => {
-      const [file] = await tx
-        .insert(files)
-        .values({
+    const created = await db.$transaction(async (tx) => {
+      const file = await tx.file.create({
+        data: {
           name: parsed.name,
           ext: extractExt(parsed.name),
           mimeType: parsed.mimeType,
@@ -55,14 +53,16 @@ export async function POST(request: Request) {
           checksumSha256: parsed.checksumSha256,
           createdBy: parsed.createdBy,
           status: "uploaded",
-          folderId: folderId ?? undefined,
-        })
-        .returning();
+          folderId,
+        },
+      });
 
-      await tx.insert(fileJobs).values({
-        fileId: file.id,
-        jobType: "index",
-        status: "pending",
+      await tx.fileJob.create({
+        data: {
+          fileId: file.id,
+          jobType: "index",
+          status: "pending",
+        },
       });
 
       return file;

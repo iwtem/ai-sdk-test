@@ -1,7 +1,5 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "~/lib/db";
-import { folders } from "~/lib/db/schema/folders";
 import {
   buildBreadcrumb,
   countChildFolders,
@@ -96,21 +94,20 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    const [updated] = await db
-      .update(folders)
-      .set({
+    const updated = await db.folder.update({
+      where: { id },
+      data: {
         name: finalName,
         parentId: finalParentId,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(folders.id, id))
-      .returning({
-        id: folders.id,
-        parentId: folders.parentId,
-        name: folders.name,
-        createdAt: folders.createdAt,
-        updatedAt: folders.updatedAt,
-      });
+      },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     return Response.json({ folder: updated });
   } catch (error) {
@@ -148,10 +145,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
       );
     }
 
-    await db
-      .update(folders)
-      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
-      .where(and(eq(folders.id, id), isNull(folders.deletedAt)));
+    await db.folder.updateMany({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
 
     return Response.json({ message: "已删除" });
   } catch (error) {

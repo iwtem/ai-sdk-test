@@ -1,6 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "~/lib/db";
-import { files } from "~/lib/db/schema/files";
 import { deleteObjectByKey } from "~/lib/storage/s3";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,13 +11,10 @@ export async function POST(_request: Request, context: RouteContext) {
       return Response.json({ message: "缺少文件 id" }, { status: 400 });
     }
 
-    const [row] = await db
-      .select({
-        id: files.id,
-        storageKey: files.storageKey,
-      })
-      .from(files)
-      .where(and(eq(files.id, id), isNotNull(files.deletedAt)));
+    const row = await db.file.findFirst({
+      where: { id, deletedAt: { not: null } },
+      select: { id: true, storageKey: true },
+    });
 
     if (!row) {
       return Response.json({ message: "仅可回收站中的文件可彻底删除" }, { status: 404 });
@@ -36,7 +31,7 @@ export async function POST(_request: Request, context: RouteContext) {
       );
     }
 
-    await db.delete(files).where(eq(files.id, id));
+    await db.file.delete({ where: { id } });
 
     return Response.json({ ok: true });
   } catch (error) {

@@ -1,7 +1,5 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { and, eq, isNull } from "drizzle-orm";
 import { db } from "~/lib/db";
-import { files } from "~/lib/db/schema/files";
 import { env } from "~/lib/env";
 import { getS3Client } from "~/lib/storage/s3";
 
@@ -14,14 +12,14 @@ export async function GET(_request: Request, context: RouteContext) {
       return Response.json({ message: "缺少文件 id" }, { status: 400 });
     }
 
-    const [file] = await db
-      .select({
-        storageKey: files.storageKey,
-        name: files.name,
-        mimeType: files.mimeType,
-      })
-      .from(files)
-      .where(and(eq(files.id, id), isNull(files.deletedAt)));
+    const file = await db.file.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        storageKey: true,
+        name: true,
+        mimeType: true,
+      },
+    });
 
     if (!file) {
       return Response.json({ message: "文件不存在" }, { status: 404 });

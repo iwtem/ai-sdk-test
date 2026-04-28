@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, sql } from "drizzle-orm";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { db } from "~/lib/db";
-import { files } from "~/lib/db/schema/files";
 import { getFolderById } from "~/lib/folders/folder-service";
 
 const querySchema = z.object({
@@ -15,16 +14,16 @@ const querySchema = z.object({
   order: z.enum(["asc", "desc"]).default("desc"),
 });
 
-function sortColumn(sort: z.infer<typeof querySchema>["sort"]) {
+function sortColumn(sort: z.infer<typeof querySchema>["sort"]): keyof Prisma.FileOrderByWithRelationInput {
   switch (sort) {
     case "name":
-      return files.name;
+      return "name";
     case "updatedAt":
-      return files.updatedAt;
+      return "updatedAt";
     case "size":
-      return files.sizeBytes;
+      return "sizeBytes";
     default:
-      return files.createdAt;
+      return "createdAt";
   }
 }
 
@@ -55,76 +54,61 @@ export async function GET(request: Request) {
       }
     }
 
-    const conditions = trashOnly ? [isNotNull(files.deletedAt)] : [isNull(files.deletedAt)];
-
+    const where: Prisma.FileWhereInput = {
+      deletedAt: trashOnly ? { not: null } : null,
+    };
     if (folderIdParam) {
-      conditions.push(eq(files.folderId, folderIdParam));
+      where.folderId = folderIdParam;
     } else if (!trashOnly) {
-      conditions.push(isNull(files.folderId));
+      where.folderId = null;
     }
-
     if (parsed.q) {
-      conditions.push(ilike(files.name, `%${parsed.q}%`));
+      where.name = { contains: parsed.q, mode: "insensitive" };
     }
     if (parsed.status) {
-      conditions.push(eq(files.status, parsed.status));
+      where.status = parsed.status;
     }
-
-    const where = and(...conditions);
-    const col = sortColumn(parsed.sort);
-    const orderFn = parsed.order === "asc" ? asc : desc;
 
     const limit = parsed.limit;
     const offset = parsed.offset;
+    const orderBy = { [sortColumn(parsed.sort)]: parsed.order } as Prisma.FileOrderByWithRelationInput;
 
-    const [items, [statsRow], [weekRow]] = await Promise.all([
-      db
-        .select()
-        .from(files)
-        .where(where)
-        .orderBy(orderFn(col))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({
-          totalCount: sql<number>`count(*)::int`,
-          totalSize: sql<number>`coalesce(sum(${files.sizeBytes}), 0)::int`,
-        })
-        .from(files)
-        .where(where),
-      trashOnly
-        ? db
-            .select({
-              weeklyUploaded: sql<number>`count(*)::int`,
-            })
-            .from(files)
-            .where(
-              and(
-                where,
-                sql`${files.deletedAt} >= now() - interval '7 days'`,
-              ),
-            )
-        : db
-            .select({
-              weeklyUploaded: sql<number>`count(*)::int`,
-            })
-            .from(files)
-            .where(
-              and(
-                where,
-                sql`${files.createdAt} >= now() - interval '7 days'`,
-              ),
-            ),
+    const [items, totalCount, sizeAgg, weeklyUploaded] = await Promise.all([
+      db.file.findMany({
+        where,
+        orderBy,
+        take: limit,
+        skip: offset,
+      }),
+      db.file.count({ where }),
+      db.file.aggregate({
+        where,
+        _sum: { sizeBytes: true },
+      }),
+      db.file.count({
+        where: {
+          ...where,
+          ...(trashOnly
+            ? {
+                deletedAt: {
+                  gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                },
+              }
+            : {
+                createdAt: {
+                  gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                },
+              }),
+        },
+      }),
     ]);
-
-    const totalCount = statsRow?.totalCount ?? 0;
 
     return Response.json({
       items,
       stats: {
         totalCount,
-        totalSize: statsRow?.totalSize ?? 0,
-        weeklyUploaded: weekRow?.weeklyUploaded ?? 0,
+        totalSize: sizeAgg._sum.sizeBytes ?? 0,
+        weeklyUploaded,
       },
       page: {
         limit,

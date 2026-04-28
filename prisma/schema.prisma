@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FileStatus {
+  uploaded
+  indexing
+  ready
+  failed
+  deleted
+}
+
+enum FileJobType {
+  parse
+  index
+  embedding
+}
+
+enum FileJobStatus {
+  pending
+  running
+  succeeded
+  failed
+}
+
+model Resource {
+  id         String      @id @default(cuid()) @db.VarChar(191)
+  content    String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  embeddings Embedding[]
+
+  @@map("resources")
+}
+
+model Embedding {
+  id         String   @id @default(cuid()) @db.VarChar(191)
+  resourceId String?  @map("resource_id") @db.VarChar(191)
+  content    String
+  embedding  Unsupported("vector(1536)")
+  resource   Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId], map: "embeddings_resource_id_idx")
+  @@map("embeddings")
+}
+
+model Folder {
+  id         String   @id @default(cuid()) @db.VarChar(191)
+  parentId   String?  @map("parent_id") @db.VarChar(191)
+  parent     Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children   Folder[] @relation("FolderTree")
+  name       String
+  createdBy  String?  @map("created_by") @db.VarChar(191)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+  files      File[]
+
+  @@index([parentId], map: "folders_parent_id_idx")
+  @@map("folders")
+}
+
+model File {
+  id              String      @id @default(cuid()) @db.VarChar(191)
+  name            String
+  ext             String      @default("") @db.VarChar(32)
+  mimeType        String      @map("mime_type") @db.VarChar(255)
+  sizeBytes       Int         @map("size_bytes")
+  storageProvider String      @default("minio") @map("storage_provider") @db.VarChar(32)
+  bucket          String      @db.VarChar(128)
+  storageKey      String      @map("storage_key")
+  checksumSha256  String?     @map("checksum_sha256") @db.VarChar(64)
+  status          FileStatus  @default(uploaded)
+  folderId        String?     @map("folder_id") @db.VarChar(191)
+  folder          Folder?     @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  createdBy       String?     @map("created_by") @db.VarChar(191)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+  fileJobs        FileJob[]
+
+  @@index([status], map: "files_status_idx")
+  @@index([createdAt], map: "files_created_at_idx")
+  @@index([name], map: "files_name_idx")
+  @@index([folderId], map: "files_folder_id_idx")
+  @@index([folderId, createdAt], map: "files_folder_id_created_at_idx")
+  @@map("files")
+}
+
+model FileJob {
+  id           String       @id @default(cuid()) @db.VarChar(191)
+  fileId       String       @map("file_id") @db.VarChar(191)
+  file         File         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  jobType      FileJobType  @map("job_type")
+  status       FileJobStatus @default(pending)
+  attempts     Int          @default(0)
+  errorMessage String?      @map("error_message")
+  payload      String?
+  startedAt    DateTime?    @map("started_at")
+  finishedAt   DateTime?    @map("finished_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@index([fileId], map: "file_jobs_file_id_idx")
+  @@index([status], map: "file_jobs_status_idx")
+  @@map("file_jobs")
+}

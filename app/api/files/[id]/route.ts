@@ -1,7 +1,5 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "~/lib/db";
-import { files } from "~/lib/db/schema/files";
 import { extractExt } from "~/lib/files/extract-ext";
 import { getFolderById } from "~/lib/folders/folder-service";
 
@@ -40,29 +38,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const parsed = patchSchema.parse(body);
 
     if (parsed.restore === true) {
-      const [deleted] = await db
-        .select({ id: files.id })
-        .from(files)
-        .where(and(eq(files.id, id), isNotNull(files.deletedAt)));
+      const deleted = await db.file.findFirst({
+        where: { id, deletedAt: { not: null } },
+        select: { id: true },
+      });
 
       if (!deleted) {
         return Response.json({ message: "文件未在回收站或不存在" }, { status: 404 });
       }
 
-      const [restored] = await db
-        .update(files)
-        .set({
+      const restored = await db.file.updateMany({
+        where: { id, deletedAt: { not: null } },
+        data: {
           deletedAt: null,
           status: "uploaded",
-          updatedAt: sql`now()`,
-        })
-        .where(and(eq(files.id, id), isNotNull(files.deletedAt)))
-        .returning();
+        },
+      });
 
-      if (!restored) {
+      if (restored.count === 0) {
         return Response.json({ message: "恢复失败" }, { status: 404 });
       }
-      return Response.json({ file: restored });
+      const file = await db.file.findUnique({ where: { id } });
+      return Response.json({ file });
     }
 
     if (parsed.folderId) {
@@ -72,14 +69,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
 
-    const [existing] = await db
-      .select({
-        id: files.id,
-        folderId: files.folderId,
-        name: files.name,
-      })
-      .from(files)
-      .where(and(eq(files.id, id), isNull(files.deletedAt)));
+    const existing = await db.file.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, folderId: true, name: true },
+    });
 
     if (!existing) {
       return Response.json({ message: "文件不存在" }, { status: 404 });
@@ -99,30 +92,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const nameUnchanged = parsed.name === undefined || existing.name === nextName;
 
     if (folderUnchanged && nameUnchanged) {
-      const [row] = await db
-        .select()
-        .from(files)
-        .where(and(eq(files.id, id), isNull(files.deletedAt)));
+      const row = await db.file.findFirst({
+        where: { id, deletedAt: null },
+      });
       return Response.json({ file: row });
     }
 
-    const [updated] = await db
-      .update(files)
-      .set({
+    const updated = await db.file.updateMany({
+      where: { id, deletedAt: null },
+      data: {
         ...(parsed.folderId !== undefined ? { folderId: nextFolderId } : {}),
         ...(parsed.name !== undefined
           ? { name: nextName, ext: nextExt ?? "" }
           : {}),
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(files.id, id), isNull(files.deletedAt)))
-      .returning();
+      },
+    });
 
-    if (!updated) {
+    if (updated.count === 0) {
       return Response.json({ message: "文件不存在" }, { status: 404 });
     }
 
-    return Response.json({ file: updated });
+    const file = await db.file.findUnique({ where: { id } });
+    return Response.json({ file });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return Response.json({ message: "请求体无效", errors: error.issues }, { status: 400 });
@@ -141,21 +132,21 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       return Response.json({ message: "缺少文件 id" }, { status: 400 });
     }
 
-    const [file] = await db
-      .select({
-        id: files.id,
-        name: files.name,
-        ext: files.ext,
-        mimeType: files.mimeType,
-        sizeBytes: files.sizeBytes,
-        status: files.status,
-        folderId: files.folderId,
-        createdBy: files.createdBy,
-        createdAt: files.createdAt,
-        updatedAt: files.updatedAt,
-      })
-      .from(files)
-      .where(and(eq(files.id, id), isNull(files.deletedAt)));
+    const file = await db.file.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        ext: true,
+        mimeType: true,
+        sizeBytes: true,
+        status: true,
+        folderId: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     if (!file) {
       return Response.json({ message: "文件不存在" }, { status: 404 });
@@ -177,21 +168,19 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
       return Response.json({ message: "缺少文件 id" }, { status: 400 });
     }
 
-    const [updated] = await db
-      .update(files)
-      .set({
+    const updated = await db.file.updateMany({
+      where: { id, deletedAt: null },
+      data: {
         status: "deleted",
-        deletedAt: sql`now()`,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(files.id, id), isNull(files.deletedAt)))
-      .returning({ id: files.id });
+        deletedAt: new Date(),
+      },
+    });
 
-    if (!updated) {
+    if (updated.count === 0) {
       return Response.json({ message: "文件不存在或已删除" }, { status: 404 });
     }
 
-    return Response.json({ ok: true, id: updated.id });
+    return Response.json({ ok: true, id });
   } catch (error) {
     return Response.json(
       { message: error instanceof Error ? error.message : "Unknown error" },

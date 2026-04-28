@@ -1,6 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
 import { db } from "~/lib/db";
-import { files } from "~/lib/db/schema/files";
 import { createDownloadSignedUrl } from "~/lib/storage/s3";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -12,13 +10,13 @@ export async function GET(_request: Request, context: RouteContext) {
       return Response.json({ message: "缺少文件 id" }, { status: 400 });
     }
 
-    const [file] = await db
-      .select({
-        storageKey: files.storageKey,
-        name: files.name,
-      })
-      .from(files)
-      .where(and(eq(files.id, id), isNull(files.deletedAt)));
+    const file = await db.file.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        storageKey: true,
+        name: true,
+      },
+    });
 
     if (!file) {
       return Response.json({ message: "文件不存在" }, { status: 404 });

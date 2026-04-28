@@ -1,33 +1,36 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { generateEmbeddings } from "~/lib/ai/embedding";
 import { db } from "~/lib/db";
-import { embeddings as embeddingsTable } from "~/lib/db/schema/embeddings";
-import {
-  insertResourceSchema,
-  type NewResourceParams,
-  resources,
-} from "~/lib/db/schema/resources";
+
+const createResourceSchema = z.object({
+  content: z.string().min(1),
+});
+
+export type NewResourceParams = z.infer<typeof createResourceSchema>;
 
 export const createResource = async (input: NewResourceParams) => {
   try {
-    const { content } = insertResourceSchema.parse(input);
+    const { content } = createResourceSchema.parse(input);
 
-    const message = await db.transaction(async (tx) => {
-      const [resource] = await tx
-        .insert(resources)
-        .values({ content })
-        .returning();
+    const message = await db.$transaction(async (tx) => {
+      const resource = await tx.resource.create({
+        data: { content },
+        select: { id: true },
+      });
 
       const embeddings = await generateEmbeddings(content);
 
-      await tx.insert(embeddingsTable).values(
-        embeddings.map((embedding) => ({
-          resourceId: resource.id,
-          content: embedding.content,
-          embedding: embedding.embedding,
-        })),
-      );
+      for (const item of embeddings) {
+        const vectorLiteral = `[${item.embedding.join(",")}]`;
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO embeddings (id, resource_id, content, embedding)
+          VALUES (${randomUUID()}, ${resource.id}, ${item.content}, ${vectorLiteral}::vector)
+        `);
+      }
 
       return "Resource successfully created with embeddings.";
     });

@@ -1,7 +1,5 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "~/lib/db";
-import { folders } from "~/lib/db/schema/folders";
 import {
   getFolderById,
   hasSiblingName,
@@ -38,22 +36,22 @@ export async function GET(request: Request) {
       }
     }
 
-    const items = await db
-      .select({
-        id: folders.id,
-        parentId: folders.parentId,
-        name: folders.name,
-        createdAt: folders.createdAt,
-        updatedAt: folders.updatedAt,
-      })
-      .from(folders)
-      .where(
-        and(
-          isNull(folders.deletedAt),
-          parentId === null ? isNull(folders.parentId) : eq(folders.parentId, parentId),
-        ),
-      )
-      .orderBy(asc(folders.name));
+    const items = await db.folder.findMany({
+      where: {
+        deletedAt: null,
+        parentId,
+      },
+      orderBy: {
+        name: "asc",
+      },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     return Response.json({ items });
   } catch (error) {
@@ -93,20 +91,20 @@ export async function POST(request: Request) {
       return Response.json({ message: "同级下已存在同名文件夹" }, { status: 409 });
     }
 
-    const [created] = await db
-      .insert(folders)
-      .values({
+    const created = await db.folder.create({
+      data: {
         parentId,
         name,
         createdBy: "当前用户",
-      })
-      .returning({
-        id: folders.id,
-        parentId: folders.parentId,
-        name: folders.name,
-        createdAt: folders.createdAt,
-        updatedAt: folders.updatedAt,
-      });
+      },
+      select: {
+        id: true,
+        parentId: true,
+        name: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     return Response.json({ folder: created });
   } catch (error) {
