@@ -21,7 +21,7 @@ export function DocumentUploadZone(props: PropsWithChildren<DocumentUploadZonePr
   });
 
   return (
-    <div {...getRootProps()} className="relative">
+    <div {...getRootProps()} className="relative h-full">
       <input {...getInputProps()} />
       {children}
       {isDragActive && !uploading && (
