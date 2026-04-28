@@ -17,7 +17,6 @@ enum FileStatus {
 enum FileJobType {
   parse
   index
-  embedding
 }
 
 enum FileJobStatus {
@@ -25,27 +24,6 @@ enum FileJobStatus {
   running
   succeeded
   failed
-}
-
-model Resource {
-  id         String      @id @default(cuid()) @db.VarChar(191)
-  content    String
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
-  embeddings Embedding[]
-
-  @@map("resources")
-}
-
-model Embedding {
-  id         String   @id @default(cuid()) @db.VarChar(191)
-  resourceId String?  @map("resource_id") @db.VarChar(191)
-  content    String
-  embedding  Unsupported("vector(1536)")
-  resource   Resource? @relation(fields: [resourceId], references: [id], onDelete: Cascade)
-
-  @@index([resourceId], map: "embeddings_resource_id_idx")
-  @@map("embeddings")
 }
 
 model Folder {

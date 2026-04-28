@@ -13,13 +13,6 @@ export const env = createEnv({
     /** 自定义对话接口 API Key */
     CHAT_API_KEY: z.string(),
 
-    /** embedding 模型 ID */
-    EMBEDDING_MODEL: z.string().default("text-embedding-v4"),
-    /** 自定义 embedding 接口 Base URL（OpenAI 兼容） */
-    EMBEDDING_BASE_URL: z.url().optional(),
-    /** 自定义 embedding 接口 API Key */
-    EMBEDDING_API_KEY: z.string().optional(),
-
     /** S3 兼容存储 Endpoint（本地 MinIO 示例：http://127.0.0.1:9000） */
     S3_ENDPOINT: z.url().optional().default("http://127.0.0.1:9000"),
     /** S3 区域 */
