@@ -1,10 +1,11 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, MoreVertical, Search } from "lucide-react";
+import { AlertCircle, ArrowLeft, MoreVertical } from "lucide-react";
 import Link from "next/link";
 import { useQueryState } from "nuqs";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { SearchInput } from "~/components/search-input";
 import { Button } from "~/components/ui/button";
 import { DataTable, type DataTableColumn } from "~/components/ui/data-table";
 import {
@@ -22,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { Input } from "~/components/ui/input";
 import { FileTypeIcon, fileVisualTypeLabels, normalizeType } from "../document-file-type";
 import { DocumentHeader } from "../document-header";
 import { formatBytes, formatDateTime, statusTextMap } from "../format";
@@ -137,7 +137,7 @@ function TrashFileActionsMenu({ file }: { file: FileItem }) {
 }
 
 export default function DocumentsTrashPage() {
-  const [query, setQuery] = useQueryState("q", { defaultValue: "" });
+  const [query] = useQueryState("q", { defaultValue: "" });
 
   const filesQuery = useInfiniteQuery({
     queryKey: ["files", { q: query, trash: true }],
@@ -242,15 +242,7 @@ export default function DocumentsTrashPage() {
       />
 
       <div className="flex flex-col gap-3">
-        <div className="relative w-48">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜索已删除文件名"
-            className="pl-8"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <SearchInput placeholder="搜索已删除文件名" />
 
         {filesError ? (
           <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">

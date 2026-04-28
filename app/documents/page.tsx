@@ -6,13 +6,12 @@ import {
   Folder,
   Grid2x2,
   List,
-  Search,
   Trash2,
   UploadCloud,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-
+import { SearchInput } from "~/components/search-input";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataTable, type DataTableColumn } from "~/components/ui/data-table";
@@ -42,8 +41,6 @@ import { useDocumentsPage } from "./use-documents-page";
 export default function DocumentsPage() {
   const {
     url,
-    keywordDraft,
-    setKeywordDraft,
     filesQuery,
     files,
     stats,
@@ -90,10 +87,6 @@ export default function DocumentsPage() {
         onError: (err) => setCreateFolderError(err instanceof Error ? err.message : "创建失败"),
       },
     );
-  };
-
-  const handleSearch = () => {
-    url.updateUrl({ q: keywordDraft.trim() });
   };
 
   const loading = filesQuery.isLoading;
@@ -267,20 +260,7 @@ export default function DocumentsPage() {
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="搜索文件名，按 Enter 搜索"
-                  className="pl-8"
-                  value={keywordDraft}
-                  onChange={(e) => setKeywordDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                  }}
-                />
-              </div>
-            </div>
+            <SearchInput placeholder="搜索文件或文件夹名称" />
 
             <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
               <ToggleGroup

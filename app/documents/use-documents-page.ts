@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
@@ -147,11 +147,6 @@ export function useDocumentsUrlState() {
 export function useDocumentsPage() {
   const queryClient = useQueryClient();
   const url = useDocumentsUrlState();
-
-  const [keywordDraft, setKeywordDraft] = useState(url.q);
-  useEffect(() => {
-    setKeywordDraft(url.q);
-  }, [url.q]);
 
   // -------------------------------------------------------------------------
   // Queries
@@ -383,8 +378,6 @@ export function useDocumentsPage() {
 
   return {
     url,
-    keywordDraft,
-    setKeywordDraft,
     filesQuery,
     files,
     stats,
