@@ -1,0 +1,34 @@
+---
+description: 组件 Props 默认使用 interface 定义
+alwaysApply: true
+---
+
+# 组件 Props 定义约定
+
+在本项目中，React 组件的 Props **默认使用 `interface`** 定义，不使用 `type` 作为首选。
+
+## 约定
+
+- 组件 Props：优先 `interface XxxProps`
+- `type` 仅用于联合类型、工具类型组合、或确有必要的场景
+- 命名统一：`<ComponentName>Props`
+
+## 示例
+
+```tsx
+// ✅ 推荐
+interface SearchInputProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function SearchInput(props: SearchInputProps) {
+  // ...
+}
+
+// ⚠️ 非首选（仅在必须时使用）
+type SearchInputProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+```

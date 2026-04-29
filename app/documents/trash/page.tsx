@@ -16,10 +16,18 @@ import { DocumentHeader } from "../document-header";
 import { formatBytes, formatDateTime, statusTextMap } from "../format";
 import { TrashFileActionsMenu } from "./trash-actions";
 
-export default async function DocumentsTrashPage() {
+interface DocumentsTrashPageProps {
+  searchParams: Promise<{ q?: string }>;
+}
+
+export default async function DocumentsTrashPage({ searchParams }: DocumentsTrashPageProps) {
+  const { q } = await searchParams;
+  const keyword = q?.trim();
+
   const trashFiles = await db.file.findMany({
     where: {
       status: "deleted",
+      ...(keyword ? { name: { contains: keyword, mode: "insensitive" } } : {}),
     },
   });
 
