@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { DataPagination } from "~/components/common/data-pagination";
 import { SearchInput } from "~/components/search-input";
 import { Button } from "~/components/ui/button";
 import {
@@ -17,19 +18,31 @@ import { formatBytes, formatDateTime, statusTextMap } from "../format";
 import { TrashFileActionsMenu } from "./trash-actions";
 
 interface DocumentsTrashPageProps {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; size?: string }>;
 }
 
 export default async function DocumentsTrashPage({ searchParams }: DocumentsTrashPageProps) {
-  const { q } = await searchParams;
+  const { q, page, size } = await searchParams;
   const keyword = q?.trim();
+  const parsedSize = Number.parseInt(size ?? "10", 10);
+  const pageSize = [10, 20, 50].includes(parsedSize) ? parsedSize : 10;
+  const parsedPage = Number.parseInt(page ?? "1", 10);
+  const currentPage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
 
-  const trashFiles = await db.file.findMany({
-    where: {
-      status: "deleted",
-      ...(keyword ? { name: { contains: keyword, mode: "insensitive" } } : {}),
-    },
-  });
+  const where = {
+    status: "deleted" as const,
+    ...(keyword ? { name: { contains: keyword, mode: "insensitive" as const } } : {}),
+  };
+
+  const [trashFiles, paginationMeta] = await db.file
+    .paginate({
+      where,
+      orderBy: { updatedAt: "desc" },
+    })
+    .withPages({
+      page: currentPage,
+      limit: pageSize,
+    });
 
   return (
     <section className="space-y-6">
@@ -112,6 +125,8 @@ export default async function DocumentsTrashPage({ searchParams }: DocumentsTras
             </TableBody>
           </Table>
         </div>
+
+        <DataPagination paginationMeta={paginationMeta} />
       </div>
     </section>
   );

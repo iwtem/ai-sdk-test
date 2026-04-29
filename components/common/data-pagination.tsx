@@ -1,63 +1,93 @@
 "use client";
 
-import { parseAsInteger, useQueryState } from "nuqs";
+import { usePathname, useSearchParams } from "next/navigation";
+import type { PageNumberPaginationMeta } from "prisma-extension-pagination";
 import {
   Pagination,
-  PaginationButton,
   PaginationContent,
   PaginationEllipsis,
   PaginationItem,
+  PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "~/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { generatePagination } from "~/lib/utils";
 
-export function DataPagination({ totalPages }: { totalPages: number }) {
-  const [currentPage, setCurrentPage] = useQueryState(
-    "page",
-    parseAsInteger.withDefault(1).withOptions({ shallow: false }),
-  );
-  const [pageSize, setPageSize] = useQueryState(
-    "size",
-    parseAsInteger.withDefault(10).withOptions({ shallow: false }),
-  );
+interface DataPaginationProps {
+  paginationMeta: PageNumberPaginationMeta<true>;
+}
 
-  if (totalPages <= 1) return null;
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+export function DataPagination({ paginationMeta }: DataPaginationProps) {
+  const { totalCount, pageCount, currentPage, isLastPage, isFirstPage, previousPage, nextPage } =
+    paginationMeta;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const createPageHref = (page: number | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (page === null || page === 1) {
+      params.delete("page");
+    } else {
+      params.set("page", page.toString());
+    }
+
+    const qs = params.toString();
+
+    return qs ? `${pathname}?${qs}` : pathname;
+  };
 
   return (
-    <Pagination>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            text="上一页"
-            onClick={() => setCurrentPage(currentPage - 1)}
-            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-          />
-        </PaginationItem>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">
+          共 <span className="font-medium text-foreground">{totalCount}</span> 条
+        </span>
+      </div>
 
-        {generatePagination(currentPage, totalPages).map((page) => (
-          <PaginationItem key={page}>
-            {page === "ellipsis" ? (
-              <PaginationEllipsis />
-            ) : (
-              <PaginationButton
-                onClick={() => setCurrentPage(page as number)}
-                isActive={currentPage === page}
-              >
-                {page}
-              </PaginationButton>
-            )}
+      <Pagination className="mx-0 w-auto justify-start sm:justify-end">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              text="上一页"
+              href={createPageHref(previousPage)}
+              className={isFirstPage ? "pointer-events-none opacity-50" : ""}
+            />
           </PaginationItem>
-        ))}
 
-        <PaginationItem>
-          <PaginationNext
-            text="下一页"
-            onClick={() => setCurrentPage(currentPage + 1)}
-            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
+          {generatePagination(currentPage, pageCount).map((page) => (
+            <PaginationItem key={page}>
+              {page === "ellipsis" ? (
+                <PaginationEllipsis />
+              ) : (
+                <PaginationLink
+                  href={createPageHref(page as number)}
+                  isActive={currentPage === page}
+                >
+                  {page}
+                </PaginationLink>
+              )}
+            </PaginationItem>
+          ))}
+
+          <PaginationItem>
+            <PaginationNext
+              text="下一页"
+              href={createPageHref(nextPage)}
+              className={isLastPage ? "pointer-events-none opacity-50" : ""}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
