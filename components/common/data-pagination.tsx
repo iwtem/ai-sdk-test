@@ -18,15 +18,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { generatePagination } from "~/lib/utils";
+import { cn, generatePagination } from "~/lib/utils";
 
 interface DataPaginationProps {
   paginationMeta: PageNumberPaginationMeta<true>;
+  placement?: "sticky" | "inline";
+  className?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-export function DataPagination({ paginationMeta }: DataPaginationProps) {
+export function DataPagination(props: DataPaginationProps) {
+  const { paginationMeta, placement = "sticky", className } = props;
   const { totalCount, pageCount, currentPage, isLastPage, isFirstPage, previousPage, nextPage } =
     paginationMeta;
 
@@ -64,7 +67,14 @@ export function DataPagination({ paginationMeta }: DataPaginationProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={cn(
+        "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+        placement === "sticky" &&
+          "fixed bottom-0 left-1/2 z-40 mb-6 w-xl max-w-full translate-x-[-50%] rounded-2xl border-border px-6 py-2 shadow-2xl backdrop-blur-md supports-backdrop-filter:bg-background/80",
+        className,
+      )}
+    >
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <div className="flex items-center gap-2">
           <Select value={pageSize} onValueChange={handlePageSizeChange}>
