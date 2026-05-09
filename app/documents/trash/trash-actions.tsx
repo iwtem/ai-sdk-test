@@ -1,8 +1,10 @@
 "use client";
 
 import type { File } from "@prisma/client";
+import { useMutation } from "@tanstack/react-query";
 import { MoreVertical } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -19,16 +21,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-
-import { useFileMutations } from "../use-document-mutations";
+import { purgeFile, restoreFile } from "~/lib/api";
 
 export function TrashFileActionsMenu({ file }: { file: File }) {
-  const { restoreFile, purgeFile } = useFileMutations();
   const [confirmPurgeOpen, setConfirmPurgeOpen] = useState(false);
 
-  const busy =
-    (restoreFile.isPending && restoreFile.variables === file.id) ||
-    (purgeFile.isPending && purgeFile.variables === file.id);
+  const { mutate: restoreFileMutation, isPending: restoreFilePending } = useMutation({
+    mutationFn: restoreFile,
+  });
+
+  const { mutate: purgeFileMutation, isPending: purgeFilePending } = useMutation({
+    mutationFn: purgeFile,
+    onError: (error) => {
+      console.error(error.message);
+    },
+  });
+
+  const busy = Boolean(restoreFilePending || purgeFilePending);
 
   return (
     <>
@@ -46,7 +55,7 @@ export function TrashFileActionsMenu({ file }: { file: File }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem onClick={() => restoreFile.mutate(file.id)}>恢复</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => restoreFileMutation(file.id)}>恢复</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setConfirmPurgeOpen(true)}>
             彻底删除
@@ -69,14 +78,14 @@ export function TrashFileActionsMenu({ file }: { file: File }) {
             <Button
               type="button"
               variant="destructive"
-              disabled={purgeFile.isPending}
+              disabled={purgeFilePending}
               onClick={() =>
-                purgeFile.mutate(file.id, {
+                purgeFileMutation(file.id, {
                   onSuccess: () => setConfirmPurgeOpen(false),
                 })
               }
             >
-              {purgeFile.isPending ? "删除中…" : "彻底删除"}
+              {purgeFilePending ? "删除中…" : "彻底删除"}
             </Button>
           </DialogFooter>
         </DialogContent>

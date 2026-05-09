@@ -33,9 +33,9 @@ export function DataPagination(props: DataPaginationProps) {
   const { totalCount, pageCount, currentPage, isLastPage, isFirstPage, previousPage, nextPage } =
     paginationMeta;
 
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const pageSize = searchParams.get("size") ?? "10";
 

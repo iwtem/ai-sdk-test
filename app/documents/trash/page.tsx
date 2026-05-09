@@ -24,10 +24,6 @@ interface DocumentsTrashPageProps {
 export default async function DocumentsTrashPage({ searchParams }: DocumentsTrashPageProps) {
   const { q, page, size } = await searchParams;
   const keyword = q?.trim();
-  const parsedSize = Number.parseInt(size ?? "10", 10);
-  const pageSize = [10, 20, 50].includes(parsedSize) ? parsedSize : 10;
-  const parsedPage = Number.parseInt(page ?? "1", 10);
-  const currentPage = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
 
   const where = {
     status: "deleted" as const,
@@ -40,8 +36,8 @@ export default async function DocumentsTrashPage({ searchParams }: DocumentsTras
       orderBy: { updatedAt: "desc" },
     })
     .withPages({
-      page: currentPage,
-      limit: pageSize,
+      page: Number.parseInt(page ?? "1", 10),
+      limit: Number.parseInt(size ?? "10", 10),
     });
 
   return (

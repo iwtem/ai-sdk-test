@@ -14,7 +14,9 @@ const querySchema = z.object({
   order: z.enum(["asc", "desc"]).default("desc"),
 });
 
-function sortColumn(sort: z.infer<typeof querySchema>["sort"]): keyof Prisma.FileOrderByWithRelationInput {
+function sortColumn(
+  sort: z.infer<typeof querySchema>["sort"],
+): keyof Prisma.FileOrderByWithRelationInput {
   switch (sort) {
     case "name":
       return "name";
@@ -41,8 +43,7 @@ export async function GET(request: Request) {
       order: searchParams.get("order") ?? undefined,
     });
 
-    const trashOnly =
-      parsed.trash === "true" || parsed.trash === "1";
+    const trashOnly = parsed.trash === "true" || parsed.trash === "1";
 
     const folderIdParam =
       parsed.folderId === undefined || parsed.folderId === "" ? null : parsed.folderId;
@@ -71,7 +72,9 @@ export async function GET(request: Request) {
 
     const limit = parsed.limit;
     const offset = parsed.offset;
-    const orderBy = { [sortColumn(parsed.sort)]: parsed.order } as Prisma.FileOrderByWithRelationInput;
+    const orderBy = {
+      [sortColumn(parsed.sort)]: parsed.order,
+    } as Prisma.FileOrderByWithRelationInput;
 
     const [items, totalCount, sizeAgg, weeklyUploaded] = await Promise.all([
       db.file.findMany({

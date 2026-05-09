@@ -1,14 +1,15 @@
+import { errorResponse, successResponse, withErrorHandler } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import { deleteObjectByKey } from "~/lib/storage/s3";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** 仅允许彻底删除已软删的文件；删除对象存储中的对象并移除数据库行 */
-export async function POST(_request: Request, context: RouteContext) {
+export const POST = withErrorHandler(async (_request: Request, context: RouteContext) => {
   try {
     const { id } = await context.params;
     if (!id) {
-      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+      return errorResponse("缺少文件 id", 400);
     }
 
     const row = await db.file.findFirst({
@@ -17,27 +18,21 @@ export async function POST(_request: Request, context: RouteContext) {
     });
 
     if (!row) {
-      return Response.json({ message: "仅可回收站中的文件可彻底删除" }, { status: 404 });
+      return errorResponse("仅可回收站中的文件可彻底删除", 404);
     }
 
     try {
       await deleteObjectByKey(row.storageKey);
     } catch (err) {
-      return Response.json(
-        {
-          message: err instanceof Error ? err.message : "对象存储删除失败",
-        },
-        { status: 502 },
-      );
+      console.error("[files/purge] object storage delete failed", err);
+      return errorResponse("删除失败，请稍后重试或联系管理员。", 502);
     }
 
     await db.file.delete({ where: { id } });
 
-    return Response.json({ ok: true });
+    return successResponse({ ok: true });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[files/purge] unexpected error", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
-}
+});
