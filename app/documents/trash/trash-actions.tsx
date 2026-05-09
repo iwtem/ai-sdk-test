@@ -4,7 +4,6 @@ import type { File } from "@prisma/client";
 import { useMutation } from "@tanstack/react-query";
 import { MoreVertical } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -32,9 +31,6 @@ export function TrashFileActionsMenu({ file }: { file: File }) {
 
   const { mutate: purgeFileMutation, isPending: purgeFilePending } = useMutation({
     mutationFn: purgeFile,
-    onError: (error) => {
-      console.error(error.message);
-    },
   });
 
   const busy = Boolean(restoreFilePending || purgeFilePending);
