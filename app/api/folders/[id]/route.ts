@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import {
   buildBreadcrumb,
@@ -29,10 +30,10 @@ export async function GET(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const folder = await getFolderById(id);
     if (!folder) {
-      return Response.json({ message: "文件夹不存在" }, { status: 404 });
+      return errorResponse("文件夹不存在", 404);
     }
     const breadcrumb = await buildBreadcrumb(id);
-    return Response.json({
+    return successResponse({
       folder: {
         id: folder.id,
         parentId: folder.parentId,
@@ -43,10 +44,8 @@ export async function GET(_request: Request, context: RouteContext) {
       breadcrumb,
     });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[folders/:id GET]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
 
@@ -55,7 +54,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const existing = await getFolderById(id);
     if (!existing) {
-      return Response.json({ message: "文件夹不存在" }, { status: 404 });
+      return errorResponse("文件夹不存在", 404);
     }
 
     const body = await request.json();
@@ -67,22 +66,21 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (parsed.name !== undefined) {
       const name = normalizeName(parsed.name);
       if (!name) {
-        return Response.json({ message: "文件夹名称不能为空" }, { status: 400 });
+        return errorResponse("文件夹名称不能为空", 400);
       }
       nextName = name;
     }
 
     if (parsed.parentId !== undefined) {
-      nextParentId =
-        parsed.parentId === "" || parsed.parentId === null ? null : parsed.parentId;
+      nextParentId = parsed.parentId === "" || parsed.parentId === null ? null : parsed.parentId;
       if (nextParentId) {
         const parent = await getFolderById(nextParentId);
         if (!parent) {
-          return Response.json({ message: "目标父文件夹不存在" }, { status: 404 });
+          return errorResponse("目标父文件夹不存在", 404);
         }
       }
       if (await wouldCreateFolderCycle(id, nextParentId)) {
-        return Response.json({ message: "不能将文件夹移动到自身或其子文件夹下" }, { status: 400 });
+        return errorResponse("不能将文件夹移动到自身或其子文件夹下", 400);
       }
     }
 
@@ -90,7 +88,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const finalParentId = nextParentId;
     if (finalName !== existing.name || finalParentId !== existing.parentId) {
       if (await hasSiblingName(finalParentId, finalName, id)) {
-        return Response.json({ message: "同级下已存在同名文件夹" }, { status: 409 });
+        return errorResponse("同级下已存在同名文件夹", 409);
       }
     }
 
@@ -109,18 +107,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
     });
 
-    return Response.json({ folder: updated });
+    return successResponse({ folder: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        { message: "Invalid request body", errors: error.issues },
-        { status: 400 },
-      );
+      return errorResponse("请求体无效", 400, 400, { errors: error.issues });
     }
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[folders/:id PATCH]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
 
@@ -129,20 +122,16 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const existing = await getFolderById(id);
     if (!existing) {
-      return Response.json({ message: "文件夹不存在" }, { status: 404 });
+      return errorResponse("文件夹不存在", 404);
     }
 
     const childFolders = await countChildFolders(id);
     const fileCount = await countFilesInFolder(id);
     if (childFolders > 0 || fileCount > 0) {
-      return Response.json(
-        {
-          message: "文件夹非空，请先删除或移走其中的子文件夹与文件",
-          childFolders,
-          fileCount,
-        },
-        { status: 409 },
-      );
+      return errorResponse("文件夹非空，请先删除或移走其中的子文件夹与文件", 409, 409, {
+        childFolders,
+        fileCount,
+      });
     }
 
     await db.folder.updateMany({
@@ -150,11 +139,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
       data: { deletedAt: new Date() },
     });
 
-    return Response.json({ message: "已删除" });
+    return successResponse({ ok: true }, "已删除");
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[folders/:id DELETE]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

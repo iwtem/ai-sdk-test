@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { parseApiJson } from "~/lib/api/parse-json";
+
 // ---------------------------------------------------------------------------
 // Shared API helper
 // ---------------------------------------------------------------------------
@@ -10,9 +12,8 @@ async function apiFetch<T = unknown>(
   init?: RequestInit,
 ): Promise<{ ok: true; data: T } | { ok: false; message: string }> {
   const res = await fetch(url, init);
-  const body = (await res.json().catch(() => ({}))) as T & { message?: string };
-  if (!res.ok) return { ok: false, message: body.message || `请求失败：${res.status}` };
-  return { ok: true, data: body };
+  const raw = await res.json().catch(() => ({}));
+  return parseApiJson<T>(res, raw);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,13 +90,11 @@ export function useFileMutations() {
 
   const fetchDownloadUrl = useCallback(async (fileId: string) => {
     const res = await fetch(`/api/files/${fileId}/download-url`);
-    const body = (await res.json().catch(() => ({}))) as {
-      message?: string;
-      downloadUrl?: string;
-    };
-    if (!res.ok) throw new Error(body.message || `获取下载链接失败：${res.status}`);
-    if (!body.downloadUrl) throw new Error("无下载地址");
-    return body.downloadUrl;
+    const raw = await res.json().catch(() => ({}));
+    const parsed = parseApiJson<{ downloadUrl?: string }>(res, raw);
+    if (!parsed.ok) throw new Error(parsed.message);
+    if (!parsed.data.downloadUrl) throw new Error("无下载地址");
+    return parsed.data.downloadUrl;
   }, []);
 
   return { moveFile, renameFile, deleteFile, restoreFile, purgeFile, fetchDownloadUrl };
@@ -118,13 +117,7 @@ export function useFolderMutations() {
   );
 
   const createFolder = useMutation({
-    mutationFn: async ({
-      parentId,
-      name,
-    }: {
-      parentId: string | null;
-      name: string;
-    }) => {
+    mutationFn: async ({ parentId, name }: { parentId: string | null; name: string }) => {
       const trimmed = name.trim();
       if (!trimmed) throw new Error("名称不能为空");
       const result = await apiFetch("/api/folders", {

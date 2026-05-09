@@ -1,9 +1,7 @@
 import { z } from "zod";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
-import {
-  getFolderById,
-  hasSiblingName,
-} from "~/lib/folders/folder-service";
+import { getFolderById, hasSiblingName } from "~/lib/folders/folder-service";
 
 const listQuerySchema = z.object({
   parentId: z.string().optional(),
@@ -32,7 +30,7 @@ export async function GET(request: Request) {
     if (parentId) {
       const parent = await getFolderById(parentId);
       if (!parent) {
-        return Response.json({ message: "父文件夹不存在" }, { status: 404 });
+        return errorResponse("父文件夹不存在", 404);
       }
     }
 
@@ -53,18 +51,13 @@ export async function GET(request: Request) {
       },
     });
 
-    return Response.json({ items });
+    return successResponse({ items });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        { message: "Invalid query params", errors: error.issues },
-        { status: 400 },
-      );
+      return errorResponse("查询参数无效", 400, 400, { errors: error.issues });
     }
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[folders GET]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
 
@@ -74,7 +67,7 @@ export async function POST(request: Request) {
     const parsed = createBodySchema.parse(body);
     const name = normalizeName(parsed.name);
     if (!name) {
-      return Response.json({ message: "文件夹名称不能为空" }, { status: 400 });
+      return errorResponse("文件夹名称不能为空", 400);
     }
 
     const parentId =
@@ -83,12 +76,12 @@ export async function POST(request: Request) {
     if (parentId) {
       const parent = await getFolderById(parentId);
       if (!parent) {
-        return Response.json({ message: "父文件夹不存在" }, { status: 404 });
+        return errorResponse("父文件夹不存在", 404);
       }
     }
 
     if (await hasSiblingName(parentId, name)) {
-      return Response.json({ message: "同级下已存在同名文件夹" }, { status: 409 });
+      return errorResponse("同级下已存在同名文件夹", 409);
     }
 
     const created = await db.folder.create({
@@ -106,17 +99,12 @@ export async function POST(request: Request) {
       },
     });
 
-    return Response.json({ folder: created });
+    return successResponse({ folder: created });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        { message: "Invalid request body", errors: error.issues },
-        { status: 400 },
-      );
+      return errorResponse("请求体无效", 400, 400, { errors: error.issues });
     }
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[folders POST]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

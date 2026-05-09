@@ -18,12 +18,19 @@ export function successResponse<T>(data: T, message = "Success") {
   return NextResponse.json(body, { status: 200 });
 }
 
-export function errorResponse(message = "Internal Server Error", code = 500, status = code) {
+/** @param data 可选附加信息（如校验 errors） */
+export function errorResponse(
+  message = "Internal Server Error",
+  code = 500,
+  status = code,
+  data?: unknown,
+) {
   const body: ApiResponse = {
     success: false,
     code,
     message,
     timestamp: Date.now(),
+    data,
   };
   return NextResponse.json(body, { status });
 }

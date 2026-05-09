@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { getFolderById } from "~/lib/folders/folder-service";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
   isDocumentUploadAllowed,
 } from "~/lib/files/document-upload-allowed";
+import { getFolderById } from "~/lib/folders/folder-service";
 import { createUploadSignedUrl } from "~/lib/storage/s3";
 import { nanoid } from "~/lib/utils";
 
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     const parsed = requestSchema.parse(body);
 
     if (!isDocumentUploadAllowed(parsed.fileName, parsed.fileType)) {
-      return Response.json({ message: DOCUMENT_UPLOAD_REJECT_MESSAGE }, { status: 415 });
+      return errorResponse(DOCUMENT_UPLOAD_REJECT_MESSAGE, 415);
     }
 
     const folderId =
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     if (folderId) {
       const folder = await getFolderById(folderId);
       if (!folder) {
-        return Response.json({ message: "文件夹不存在" }, { status: 404 });
+        return errorResponse("文件夹不存在", 404);
       }
     }
 
@@ -53,23 +54,12 @@ export async function POST(request: Request) {
       contentType: parsed.fileType,
     });
 
-    return Response.json(result);
+    return successResponse(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        {
-          message: "Invalid request payload",
-          errors: error.issues,
-        },
-        { status: 400 },
-      );
+      return errorResponse("请求体无效", 400, 400, { errors: error.issues });
     }
-
-    return Response.json(
-      {
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    console.error("[files/upload-url]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

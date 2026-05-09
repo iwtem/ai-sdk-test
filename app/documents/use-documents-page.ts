@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { parseApiJson } from "~/lib/api/parse-json";
 import {
   DOCUMENT_UPLOAD_REJECT_MESSAGE,
   isDocumentUploadAllowed,
@@ -73,14 +74,15 @@ async function fetchFilesPage(params: {
   sp.set("offset", String(params.offset));
 
   const res = await fetch(`/api/files?${sp.toString()}`);
-  if (!res.ok) throw new Error(`请求失败：${res.status}`);
-
-  const data = (await res.json()) as {
+  const raw = await res.json().catch(() => ({}));
+  const parsed = parseApiJson<{
     items: Parameters<typeof mapFileItems>[0];
     stats: FilesPage["stats"];
     page: { hasMore: boolean };
-  };
+  }>(res, raw);
+  if (!parsed.ok) throw new Error(parsed.message);
 
+  const data = parsed.data;
   return { items: mapFileItems(data.items), stats: data.stats, page: data.page };
 }
 
@@ -88,9 +90,10 @@ async function fetchFolders(parentId: string | null): Promise<FolderListItem[]> 
   const sp = new URLSearchParams();
   if (parentId) sp.set("parentId", parentId);
   const res = await fetch(`/api/folders?${sp.toString()}`);
-  if (!res.ok) throw new Error(`加载文件夹失败：${res.status}`);
-  const data = (await res.json()) as { items: FolderListItem[] };
-  return data.items;
+  const raw = await res.json().catch(() => ({}));
+  const parsed = parseApiJson<{ items: FolderListItem[] }>(res, raw);
+  if (!parsed.ok) throw new Error(parsed.message);
+  return parsed.data.items;
 }
 
 async function fetchBreadcrumb(
@@ -98,9 +101,10 @@ async function fetchBreadcrumb(
 ): Promise<Array<{ id: string; name: string }>> {
   if (!folderId) return [];
   const res = await fetch(`/api/folders/${folderId}`);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { breadcrumb: Array<{ id: string; name: string }> };
-  return data.breadcrumb;
+  const raw = await res.json().catch(() => ({}));
+  const parsed = parseApiJson<{ breadcrumb: Array<{ id: string; name: string }> }>(res, raw);
+  if (!parsed.ok) return [];
+  return parsed.data.breadcrumb;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,11 +271,13 @@ export function useDocumentsPage() {
             ...(folderId ? { folderId } : {}),
           }),
         });
-        if (!signRes.ok) {
-          const err = (await signRes.json().catch(() => null)) as { message?: string } | null;
-          throw new Error(err?.message || `获取上传地址失败：${signRes.status}`);
-        }
-        const signData = (await signRes.json()) as { uploadUrl: string; key: string };
+        const signRaw = await signRes.json().catch(() => ({}));
+        const signParsed = parseApiJson<{
+          uploadUrl: string;
+          key: string;
+        }>(signRes, signRaw);
+        if (!signParsed.ok) throw new Error(signParsed.message);
+        const signData = signParsed.data;
         const contentType = file.type || "application/octet-stream";
 
         await putFileToSignedUrl(taskId, signData.uploadUrl, file, contentType);
@@ -288,10 +294,9 @@ export function useDocumentsPage() {
             ...(folderId ? { folderId } : {}),
           }),
         });
-        if (!completeRes.ok) {
-          const err = (await completeRes.json().catch(() => null)) as { message?: string } | null;
-          throw new Error(err?.message || `入库失败：${completeRes.status}`);
-        }
+        const completeRaw = await completeRes.json().catch(() => ({}));
+        const completeParsed = parseApiJson<unknown>(completeRes, completeRaw);
+        if (!completeParsed.ok) throw new Error(completeParsed.message);
 
         updateTask(taskId, { status: "success", message: "上传成功" });
       } catch (err) {

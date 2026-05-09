@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import { getFolderById } from "~/lib/folders/folder-service";
 
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
     if (!trashOnly && folderIdParam) {
       const folder = await getFolderById(folderIdParam);
       if (!folder) {
-        return Response.json({ message: "文件夹不存在" }, { status: 404 });
+        return errorResponse("文件夹不存在", 404);
       }
     }
 
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    return Response.json({
+    return successResponse({
       items,
       stats: {
         totalCount,
@@ -121,20 +122,9 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        {
-          message: "Invalid query params",
-          errors: error.issues,
-        },
-        { status: 400 },
-      );
+      return errorResponse("查询参数无效", 400, 400, { errors: error.issues });
     }
-
-    return Response.json(
-      {
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    console.error("[files GET]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

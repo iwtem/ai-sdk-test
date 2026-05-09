@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import { extractExt } from "~/lib/files/extract-ext";
 import { getFolderById } from "~/lib/folders/folder-service";
@@ -11,8 +12,7 @@ const patchSchema = z
   })
   .superRefine((val, ctx) => {
     const hasRestore = val.restore === true;
-    const hasOther =
-      val.folderId !== undefined || val.name !== undefined;
+    const hasOther = val.folderId !== undefined || val.name !== undefined;
     if (!hasRestore && !hasOther) {
       ctx.addIssue({
         code: "custom",
@@ -31,7 +31,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     const { id } = await context.params;
     if (!id) {
-      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+      return errorResponse("缺少文件 id", 400);
     }
 
     const body = await request.json();
@@ -44,7 +44,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       });
 
       if (!deleted) {
-        return Response.json({ message: "文件未在回收站或不存在" }, { status: 404 });
+        return errorResponse("文件未在回收站或不存在", 404);
       }
 
       const restored = await db.file.updateMany({
@@ -56,16 +56,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       });
 
       if (restored.count === 0) {
-        return Response.json({ message: "恢复失败" }, { status: 404 });
+        return errorResponse("恢复失败", 404);
       }
       const file = await db.file.findUnique({ where: { id } });
-      return Response.json({ file });
+      return successResponse({ file });
     }
 
     if (parsed.folderId) {
       const folder = await getFolderById(parsed.folderId);
       if (!folder) {
-        return Response.json({ message: "目标文件夹不存在" }, { status: 404 });
+        return errorResponse("目标文件夹不存在", 404);
       }
     }
 
@@ -75,14 +75,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
 
     if (!existing) {
-      return Response.json({ message: "文件不存在" }, { status: 404 });
+      return errorResponse("文件不存在", 404);
     }
 
     const nextFolderId =
       parsed.folderId !== undefined ? (parsed.folderId ?? null) : (existing.folderId ?? null);
     const nextName = parsed.name !== undefined ? parsed.name.trim() : existing.name;
     if (parsed.name !== undefined && !nextName) {
-      return Response.json({ message: "文件名不能为空" }, { status: 400 });
+      return errorResponse("文件名不能为空", 400);
     }
 
     const nextExt = parsed.name !== undefined ? extractExt(nextName) : undefined;
@@ -95,33 +95,29 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const row = await db.file.findFirst({
         where: { id, deletedAt: null },
       });
-      return Response.json({ file: row });
+      return successResponse({ file: row });
     }
 
     const updated = await db.file.updateMany({
       where: { id, deletedAt: null },
       data: {
         ...(parsed.folderId !== undefined ? { folderId: nextFolderId } : {}),
-        ...(parsed.name !== undefined
-          ? { name: nextName, ext: nextExt ?? "" }
-          : {}),
+        ...(parsed.name !== undefined ? { name: nextName, ext: nextExt ?? "" } : {}),
       },
     });
 
     if (updated.count === 0) {
-      return Response.json({ message: "文件不存在" }, { status: 404 });
+      return errorResponse("文件不存在", 404);
     }
 
     const file = await db.file.findUnique({ where: { id } });
-    return Response.json({ file });
+    return successResponse({ file });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json({ message: "请求体无效", errors: error.issues }, { status: 400 });
+      return errorResponse("请求体无效", 400, 400, { errors: error.issues });
     }
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[files/:id PATCH]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
 
@@ -129,7 +125,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   try {
     const { id } = await context.params;
     if (!id) {
-      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+      return errorResponse("缺少文件 id", 400);
     }
 
     const file = await db.file.findFirst({
@@ -149,15 +145,13 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     });
 
     if (!file) {
-      return Response.json({ message: "文件不存在" }, { status: 404 });
+      return errorResponse("文件不存在", 404);
     }
 
-    return Response.json({ file });
+    return successResponse({ file });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[files/:id GET]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
 
@@ -165,7 +159,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   try {
     const { id } = await context.params;
     if (!id) {
-      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+      return errorResponse("缺少文件 id", 400);
     }
 
     const updated = await db.file.updateMany({
@@ -177,14 +171,12 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     });
 
     if (updated.count === 0) {
-      return Response.json({ message: "文件不存在或已删除" }, { status: 404 });
+      return errorResponse("文件不存在或已删除", 404);
     }
 
-    return Response.json({ ok: true, id });
+    return successResponse({ ok: true, id });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[files/:id DELETE]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

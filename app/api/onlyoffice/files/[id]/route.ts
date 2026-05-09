@@ -1,4 +1,5 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { errorResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import { env } from "~/lib/env";
 import { getS3Client } from "~/lib/storage/s3";
@@ -9,7 +10,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     if (!id) {
-      return Response.json({ message: "缺少文件 id" }, { status: 400 });
+      return errorResponse("缺少文件 id", 400);
     }
 
     const file = await db.file.findFirst({
@@ -22,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
     });
 
     if (!file) {
-      return Response.json({ message: "文件不存在" }, { status: 404 });
+      return errorResponse("文件不存在", 404);
     }
 
     const client = getS3Client();
@@ -34,7 +35,7 @@ export async function GET(_request: Request, context: RouteContext) {
     );
 
     if (!object.Body) {
-      return Response.json({ message: "文件内容不存在" }, { status: 404 });
+      return errorResponse("文件内容不存在", 404);
     }
 
     const body = object.Body.transformToWebStream();
@@ -46,9 +47,7 @@ export async function GET(_request: Request, context: RouteContext) {
       },
     });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    );
+    console.error("[onlyoffice/files/:id]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }

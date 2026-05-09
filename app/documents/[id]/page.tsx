@@ -4,8 +4,10 @@ import { DocumentEditor } from "@onlyoffice/document-editor-react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { use } from "react";
 
 import { Button } from "~/components/ui/button";
+import { parseApiJson } from "~/lib/api/parse-json";
 import { env } from "~/lib/env";
 
 import type { statusTextMap } from "../format";
@@ -52,26 +54,22 @@ function getDocumentType(ext: string) {
 
 async function fetchFileDetail(fileId: string): Promise<FileDetail> {
   const res = await fetch(`/api/files/${fileId}`);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(body.message || `加载失败：${res.status}`);
-  }
-  const data = (await res.json()) as { file: FileDetail };
-  return data.file;
+  const raw = await res.json().catch(() => ({}));
+  const parsed = parseApiJson<{ file: FileDetail }>(res, raw);
+  if (!parsed.ok) throw new Error(parsed.message);
+  return parsed.data.file;
 }
 
 async function fetchDownloadUrl(fileId: string): Promise<string | null> {
   const res = await fetch(`/api/files/${fileId}/download-url`);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new Error(body.message || `获取下载链接失败：${res.status}`);
-  }
-  const data = (await res.json()) as { downloadUrl?: string };
-  return data.downloadUrl || null;
+  const raw = await res.json().catch(() => ({}));
+  const parsed = parseApiJson<{ downloadUrl?: string }>(res, raw);
+  if (!parsed.ok) throw new Error(parsed.message);
+  return parsed.data.downloadUrl ?? null;
 }
 
-export default async function DocumentFileDetailPage({ params }: PageProps) {
-  const { id: fileId } = await params;
+export default function DocumentFileDetailPage({ params }: PageProps) {
+  const { id: fileId } = use(params);
   const appInternalUrl = env.APP_INTERNAL_URL;
   const onlyOfficeUrl = env.ONLYOFFICE_URL;
 

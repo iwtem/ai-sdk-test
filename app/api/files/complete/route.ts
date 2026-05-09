@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorResponse, successResponse } from "~/lib/api/response";
 import { db } from "~/lib/db";
 import { env } from "~/lib/env";
 import {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const parsed = requestSchema.parse(body);
 
     if (!isDocumentUploadAllowed(parsed.name, parsed.mimeType)) {
-      return Response.json({ message: DOCUMENT_UPLOAD_REJECT_MESSAGE }, { status: 415 });
+      return errorResponse(DOCUMENT_UPLOAD_REJECT_MESSAGE, 415);
     }
 
     const folderId =
@@ -32,13 +33,13 @@ export async function POST(request: Request) {
     if (folderId) {
       const folder = await getFolderById(folderId);
       if (!folder) {
-        return Response.json({ message: "文件夹不存在" }, { status: 404 });
+        return errorResponse("文件夹不存在", 404);
       }
     }
 
     const bucket = env.S3_BUCKET;
     if (!bucket) {
-      return Response.json({ message: "S3_BUCKET is not configured" }, { status: 500 });
+      return errorResponse("对象存储未配置", 500);
     }
 
     const created = await db.$transaction(async (tx) => {
@@ -68,26 +69,12 @@ export async function POST(request: Request) {
       return file;
     });
 
-    return Response.json({
-      message: "File metadata stored successfully",
-      file: created,
-    });
+    return successResponse({ file: created }, "元数据已保存");
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json(
-        {
-          message: "Invalid request payload",
-          errors: error.issues,
-        },
-        { status: 400 },
-      );
+      return errorResponse("请求体无效", 400, 400, { errors: error.issues });
     }
-
-    return Response.json(
-      {
-        message: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    console.error("[files/complete]", error);
+    return errorResponse("服务器异常，请稍后重试。", 500);
   }
 }
